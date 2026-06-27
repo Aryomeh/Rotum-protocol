@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'edge'
 
@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
     if (!userId || !slug) {
       return NextResponse.json({ error: 'Missing userId or slug' }, { status: 400 })
     }
+
+    const supabaseAdmin = getSupabaseAdmin()
 
     // Call the DB function — handles balance check, cost scaling, hash recalc
     const { data, error } = await supabaseAdmin.rpc('install_node', {
