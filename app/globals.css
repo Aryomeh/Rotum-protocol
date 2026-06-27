@@ -1,0 +1,271 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rtm-bg:      #080a0f;
+  --rtm-surface: #0d1017;
+  --rtm-card:    #111520;
+  --rtm-border:  #1a2230;
+  --rtm-accent:  #7b5ea7;
+  --rtm-purple:  #9d7fd4;
+  --rtm-green:   #00e5a0;
+  --rtm-amber:   #f0a500;
+  --rtm-red:     #ff4455;
+  --rtm-text:    #c0cce0;
+  --rtm-muted:   #4a5a70;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background-color: var(--rtm-bg);
+  color: var(--rtm-text);
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  /* Disable text selection for app feel */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Disable tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
+  /* Prevent overscroll bounce on iOS */
+  overscroll-behavior: none;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 3px; height: 3px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--rtm-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--rtm-accent); }
+
+/* ── Typography helpers ────────────────────────────────── */
+.font-mono { font-family: 'Share Tech Mono', monospace; }
+.font-head { font-family: 'Rajdhani', sans-serif; }
+
+/* ── RTM glow effects ──────────────────────────────────── */
+.glow-purple {
+  text-shadow: 0 0 12px rgba(157, 127, 212, 0.6);
+}
+.glow-green {
+  text-shadow: 0 0 12px rgba(0, 229, 160, 0.5);
+}
+.glow-amber {
+  text-shadow: 0 0 12px rgba(240, 165, 0, 0.5);
+}
+
+/* ── Card base ─────────────────────────────────────────── */
+.rtm-card {
+  background: var(--rtm-card);
+  border: 1px solid var(--rtm-border);
+  border-radius: 6px;
+}
+
+/* ── Top accent bar on cards ───────────────────────────── */
+.rtm-card-purple { border-top: 2px solid var(--rtm-purple); }
+.rtm-card-green  { border-top: 2px solid var(--rtm-green); }
+.rtm-card-amber  { border-top: 2px solid var(--rtm-amber); }
+.rtm-card-teal   { border-top: 2px solid #00ccdd; }
+
+/* ── Buttons ───────────────────────────────────────────── */
+.btn-rtm {
+  background: #0f0820;
+  border: 1px solid var(--rtm-accent);
+  color: var(--rtm-purple);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  letter-spacing: 1px;
+}
+.btn-rtm:hover {
+  background: var(--rtm-accent);
+  color: #fff;
+}
+.btn-rtm:disabled {
+  border-color: var(--rtm-border);
+  color: var(--rtm-muted);
+  background: none;
+  cursor: not-allowed;
+}
+
+.btn-green {
+  background: #0a1a10;
+  border: 1px solid var(--rtm-green);
+  color: var(--rtm-green);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-green:hover {
+  background: var(--rtm-green);
+  color: #000;
+}
+
+/* ── Progress bar ──────────────────────────────────────── */
+.progress-track {
+  height: 3px;
+  background: var(--rtm-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill-purple {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #3a2060, var(--rtm-purple));
+  transition: width 1s ease;
+}
+.progress-fill-green {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #003a20, var(--rtm-green));
+  transition: width 2s ease;
+}
+
+/* ── Pulse dot ─────────────────────────────────────────── */
+.pulse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--rtm-green);
+  border-radius: 50%;
+  animation: blink 1.2s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+/* ── Page transitions ──────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-page {
+  animation: fadeInUp 0.2s ease;
+}
+
+/* ── Feed item slide ───────────────────────────────────── */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-feed {
+  animation: slideDown 0.3s ease;
+}
+
+/* ── Ticker badge ──────────────────────────────────────── */
+.rtm-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--rtm-purple);
+  background: #1a1030;
+  border: 1px solid var(--rtm-accent);
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 2px;
+}
+
+/* ── Section label ─────────────────────────────────────── */
+.section-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--rtm-muted);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+}
+
+/* ── Toast ─────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f0820;
+  border: 1px solid var(--rtm-purple);
+  color: var(--rtm-purple);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  padding: 8px 18px;
+  border-radius: 4px;
+  z-index: 9999;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: toastIn 0.3s ease;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Level dots ────────────────────────────────────────── */
+.lvl-dot {
+  width: 10px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--rtm-border);
+}
+.lvl-dot.filled {
+  background: var(--rtm-purple);
+}
+
+/* ── Maxed badge ───────────────────────────────────────── */
+.maxed-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--rtm-green);
+  border: 1px solid #1a3a25;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+/* ── Leaderboard you-row ───────────────────────────────── */
+.lb-you {
+  border-color: var(--rtm-purple) !important;
+  background: #0d0820 !important;
+}
+
+/* ── Terminal prompt line ──────────────────────────────── */
+.terminal-line {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--rtm-muted);
+  padding: 6px 0;
+  border-top: 1px solid var(--rtm-border);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.terminal-line::before {
+  content: '$RTM >';
+  color: var(--rtm-purple);
+  font-size: 10px;
+}
+
+/* ── Watermark text behind card ────────────────────────── */
+.rtm-watermark {
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 64px;
+  color: var(--rtm-accent);
+  opacity: 0.04;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
