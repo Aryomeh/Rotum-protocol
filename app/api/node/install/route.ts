@@ -38,7 +38,10 @@ export async function POST(req: NextRequest) {
       color:   'green',
     })
 
-    return NextResponse.json({ success: true, ...result })
+    // Avoid duplicate 'success' property when spreading result
+    const { success, ...rest } = result
+
+    return NextResponse.json({ success: true, ...rest })
   } catch (err: any) {
     console.error('[node/install]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
