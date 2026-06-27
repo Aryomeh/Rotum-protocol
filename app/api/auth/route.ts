@@ -1,31 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateTelegramInitData } from '@/lib/telegram'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import crypto from 'crypto'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 export async function POST(req: NextRequest) {
   try {
     const { initData } = await req.json()
+    const db = getSupabaseAdmin()
 
-    // 1. Validate Telegram signature
     const { valid, user: tgUser, data } = validateTelegramInitData(initData || '')
 
-    // In development allow bypassing with a test user
     const isDev = process.env.NODE_ENV === 'development'
     if (!valid && !isDev) {
       return NextResponse.json({ error: 'Invalid Telegram initData' }, { status: 401 })
     }
 
-    const telegramId   = tgUser?.id ?? 99999999
-    const telegramName = tgUser ? `${tgUser.first_name} ${tgUser.last_name ?? ''}`.trim() : 'Dev User'
+    const telegramId       = tgUser?.id ?? 99999999
+    const telegramName     = tgUser ? `${tgUser.first_name} ${tgUser.last_name ?? ''}`.trim() : 'Dev User'
     const telegramUsername = tgUser?.username ?? null
 
-    // 2. Check for referral code in start_param
     let referredById: string | null = null
     if (data?.start_param) {
-      const { data: referrer } = await supabaseAdmin
+      const { data: referrer } = await db
         .from('users')
         .select('id')
         .eq('referral_code', data.start_param)
@@ -33,8 +31,7 @@ export async function POST(req: NextRequest) {
       if (referrer) referredById = referrer.id
     }
 
-    // 3. Upsert user
-    const { data: existingUser } = await supabaseAdmin
+    const { data: existingUser } = await db
       .from('users')
       .select('*')
       .eq('telegram_id', telegramId)
@@ -45,14 +42,14 @@ export async function POST(req: NextRequest) {
 
     if (!existingUser) {
       isNew = true
-      const { data: newUser, error } = await supabaseAdmin
+      const { data: newUser, error } = await db
         .from('users')
         .insert({
           telegram_id:       telegramId,
           telegram_username: telegramUsername,
           telegram_name:     telegramName,
           referred_by:       referredById,
-          rtm_balance:       120,  // starter balance
+          rtm_balance:       120,
         })
         .select()
         .single()
@@ -60,19 +57,15 @@ export async function POST(req: NextRequest) {
       if (error) throw error
       dbUser = newUser
 
-      // Apply referral bonus
       if (referredById) {
-        await supabaseAdmin.from('referrals').insert({
-          referrer_id:    referredById,
-          referred_id:    newUser.id,
-          bonus_applied:  false,
+        await db.from('referrals').insert({
+          referrer_id:   referredById,
+          referred_id:   newUser.id,
+          bonus_applied: false,
         })
-        // Give referrer a 5% hash boost (stored as multiplier bump)
-        // This is handled by the ranking refresh function
       }
     } else {
-      // Update last_active + name in case it changed
-      await supabaseAdmin
+      await db
         .from('users')
         .update({
           telegram_name:     telegramName,
@@ -82,7 +75,6 @@ export async function POST(req: NextRequest) {
         .eq('id', existingUser.id)
     }
 
-    // 4. Generate a simple session token (for protecting other API routes)
     const sessionToken = crypto
       .createHmac('sha256', process.env.TELEGRAM_BOT_SECRET!)
       .update(`${telegramId}:${dbUser.id}:${Date.now()}`)
