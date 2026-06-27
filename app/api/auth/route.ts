@@ -3,7 +3,7 @@ import { validateTelegramInitData } from '@/lib/telegram'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import crypto from 'crypto'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
