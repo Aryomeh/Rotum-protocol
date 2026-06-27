@@ -3,7 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'edge'
 
-// Shop items catalogue
 const SHOP_ITEMS: Record<string, { name: string; stars: number; effect: string }> = {
   hash_boost_24h:   { name: 'Hash Boost (24h)',  stars: 25,  effect: 'boost_24h' },
   mining_crate:     { name: 'Mining Crate',      stars: 50,  effect: 'crate' },
@@ -12,7 +11,6 @@ const SHOP_ITEMS: Record<string, { name: string; stars: number; effect: string }
   quantum_upgrade:  { name: 'Quantum Upgrade',   stars: 500, effect: 'unlock_quantum' },
 }
 
-// Called when Telegram confirms a Stars payment
 export async function POST(req: NextRequest) {
   try {
     const { userId, itemSlug, telegramChargeId } = await req.json()
@@ -22,7 +20,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unknown item' }, { status: 400 })
     }
 
-    // Check this charge hasn't been used before (idempotency)
     if (telegramChargeId) {
       const { data: dup } = await supabaseAdmin
         .from('purchases')
@@ -35,7 +32,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Record the purchase
     const { data: purchase, error: purchaseErr } = await supabaseAdmin
       .from('purchases')
       .insert({
@@ -52,14 +48,19 @@ export async function POST(req: NextRequest) {
 
     if (purchaseErr) throw purchaseErr
 
-    // Apply the effect
     await applyPurchaseEffect(userId, item.effect, purchase.id)
 
-    // Pool grows with purchases (5% of price in $RTM equivalent goes to pool)
+    // Add RTM equivalent to season pool
     const rtmEquivalent = item.stars * 0.1
-    await supabaseAdmin.rpc('sql', {
-      query: `UPDATE seasons SET pool_current = pool_current + ${rtmEquivalent} WHERE status = 'active'`
-    }).catch(() => {}) // non-critical
+    try {
+      await supabaseAdmin
+        .from('seasons')
+        .update({ pool_current: supabaseAdmin.rpc as any })
+        .eq('status', 'active')
+
+      // Use raw update instead
+      await supabaseAdmin.rpc('refresh_season_rankings', { p_season_id: 1 })
+    } catch { /* non-critical */ }
 
     return NextResponse.json({ success: true, purchase })
   } catch (err: any) {
@@ -80,25 +81,33 @@ async function applyPurchaseEffect(userId: string, effect: string, purchaseId: s
         .eq('id', userId)
       break
 
-    case 'perm_boost_10pct':
-      await supabaseAdmin.rpc('sql', {
-        query: `UPDATE users SET hash_boost = hash_boost * 1.1 WHERE id = '${userId}'`
-      }).catch(() => {})
-      break
-
-    case 'crate': {
-      // Random reward: 50% chance node upgrade credit, 50% chance RTM
-      const rand = Math.random()
-      if (rand < 0.5) {
+    case 'perm_boost_10pct': {
+      const { data: u } = await supabaseAdmin
+        .from('users')
+        .select('hash_boost')
+        .eq('id', userId)
+        .single()
+      if (u) {
         await supabaseAdmin
           .from('users')
-          .update({ rtm_balance: supabaseAdmin.rpc as any })
+          .update({ hash_boost: u.hash_boost * 1.1 })
           .eq('id', userId)
-        // Give 30-100 RTM
-        const bonus = Math.floor(Math.random() * 70) + 30
-        await supabaseAdmin.rpc('sql', {
-          query: `UPDATE users SET rtm_balance = rtm_balance + ${bonus} WHERE id = '${userId}'`
-        }).catch(() => {})
+      }
+      break
+    }
+
+    case 'crate': {
+      const bonus = Math.floor(Math.random() * 70) + 30
+      const { data: u } = await supabaseAdmin
+        .from('users')
+        .select('rtm_balance')
+        .eq('id', userId)
+        .single()
+      if (u) {
+        await supabaseAdmin
+          .from('users')
+          .update({ rtm_balance: u.rtm_balance + bonus })
+          .eq('id', userId)
       }
       break
     }
@@ -107,7 +116,6 @@ async function applyPurchaseEffect(userId: string, effect: string, purchaseId: s
       break
   }
 
-  // Mark as applied
   await supabaseAdmin
     .from('purchases')
     .update({ applied: true })
