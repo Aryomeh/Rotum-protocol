@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'edge'
 
@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const limit = parseInt(searchParams.get('limit') ?? '20', 10)
 
+    const supabaseAdmin = getSupabaseAdmin()
     const { data, error } = await supabaseAdmin
       .from('network_feed')
       .select('*')
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const { message, color, type } = await req.json()
 
+    const supabaseAdmin = getSupabaseAdmin()
     const { data, error } = await supabaseAdmin
       .from('network_feed')
       .insert({ message, color: color ?? 'accent', type: type ?? 'event' })
