@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import { nextLevelCost } from '@/lib/hash'
 import type { UpgradeCatalogue, UserNode } from '@/lib/types'
@@ -10,10 +10,34 @@ const CATEGORY_LABELS: Record<string, string> = {
   advanced:       'ADVANCED',
 }
 
+// Install timer durations in seconds
+const INSTALL_TIMERS: Record<string, number> = {
+  cpu_cluster:       5 * 60,
+  gpu_farm:          15 * 60,
+  asic_cluster:      30 * 60,
+  cooling_system:    10 * 60,
+  power_grid:        10 * 60,
+  ai_optimizer:      45 * 60,
+  validator_node:    2 * 60 * 60,
+  quantum_processor: 4 * 60 * 60,
+}
+
+interface InstallState {
+  slug:      string
+  name:      string
+  cost:      number
+  startedAt: number
+  duration:  number
+  done:      boolean
+}
+
 export default function Nodes() {
   const { user, upgrades, userNodes, setUserNodes, setUser } = useStore()
-  const [loading, setLoading] = useState<string | null>(null)
-  const [toast, setToast]     = useState<string | null>(null)
+  const [toast, setToast]       = useState<string | null>(null)
+  const [installing, setInstalling] = useState<InstallState | null>(null)
+  const [payModal, setPayModal] = useState<{ upgrade: UpgradeCatalogue; cost: number } | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [timeLeft, setTimeLeft] = useState(0)
 
   const nodeMap = Object.fromEntries(userNodes.map((n) => [n.upgrade_slug, n]))
 
@@ -23,80 +47,201 @@ export default function Nodes() {
     return acc
   }, {})
 
+  // Progress timer
+  useEffect(() => {
+    if (!installing || installing.done) return
+    const id = setInterval(() => {
+      const elapsed  = (Date.now() - installing.startedAt) / 1000
+      const pct      = Math.min(100, (elapsed / installing.duration) * 100)
+      const left     = Math.max(0, installing.duration - elapsed)
+      setProgress(pct)
+      setTimeLeft(left)
+      if (pct >= 100) {
+        setInstalling(prev => prev ? { ...prev, done: true } : null)
+        clearInterval(id)
+      }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [installing])
+
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(null), 2500)
   }
 
-  async function handleInstall(slug: string) {
-    if (!user || loading) return
-    setLoading(slug)
+  function formatTime(secs: number): string {
+    if (secs >= 3600) return `${Math.floor(secs/3600)}h ${Math.floor((secs%3600)/60)}m`
+    if (secs >= 60)   return `${Math.floor(secs/60)}m ${Math.floor(secs%60)}s`
+    return `${Math.floor(secs)}s`
+  }
+
+  function openPayModal(upgrade: UpgradeCatalogue) {
+    const currentLevel = nodeMap[upgrade.slug]?.level ?? 0
+    const cost = nextLevelCost(upgrade, currentLevel)
+    setPayModal({ upgrade, cost })
+  }
+
+  async function payWithRTM() {
+    if (!payModal || !user) return
+    const { upgrade, cost } = payModal
+
+    if (user.rtm_balance < cost) {
+      showToast('Insufficient $RTM balance')
+      return
+    }
+
+    setPayModal(null)
+    startInstall(upgrade, cost)
+  }
+
+  async function payWithTON() {
+    if (!payModal || !user) return
+    const { upgrade, cost } = payModal
+    // TON payment will be wired in Phase 3
+    // For now show coming soon
+    showToast('💎 TON payment coming soon')
+  }
+
+  async function startInstall(upgrade: UpgradeCatalogue, cost: number) {
+    if (!user) return
+    const duration = INSTALL_TIMERS[upgrade.slug] ?? 5 * 60
+
+    // Deduct balance optimistically
+    setUser({ ...user, rtm_balance: user.rtm_balance - cost })
+
+    // Start install timer
+    setInstalling({
+      slug:      upgrade.slug,
+      name:      upgrade.name,
+      cost,
+      startedAt: Date.now(),
+      duration,
+      done:      false,
+    })
+    setProgress(0)
+    setTimeLeft(duration)
+  }
+
+  async function completeInstall() {
+    if (!installing || !user) return
+
     try {
       const res  = await fetch('/api/node/install', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.id, slug }),
+        body:    JSON.stringify({ userId: user.id, slug: installing.slug }),
       })
       const json = await res.json()
-      if (!json.success) { showToast(json.error ?? 'Failed'); return }
 
-      // Update local store optimistically
-      const existing = nodeMap[slug]
+      if (!json.success) {
+        showToast(json.error ?? 'Install failed')
+        // Refund
+        setUser({ ...user, rtm_balance: user.rtm_balance + installing.cost })
+        setInstalling(null)
+        return
+      }
+
+      const existing = nodeMap[installing.slug]
       const newNode: UserNode = existing
         ? { ...existing, level: json.new_level }
         : {
             id:           crypto.randomUUID(),
             user_id:      user.id,
-            upgrade_slug: slug,
+            upgrade_slug: installing.slug,
             level:        1,
             installed_at: new Date().toISOString(),
           }
 
-      const updatedNodes = [
-        ...userNodes.filter((n) => n.upgrade_slug !== slug),
-        newNode,
-      ]
-      setUserNodes(updatedNodes)
-      setUser({ ...user, hash_power: json.new_hash, rtm_balance: user.rtm_balance - json.cost })
-
-      const upgrade = upgrades.find((u) => u.slug === slug)
-      showToast(`✓ ${upgrade?.name ?? slug} installed · Hash rate boosted`)
+      setUserNodes([...userNodes.filter(n => n.upgrade_slug !== installing.slug), newNode])
+      setUser({ ...user, hash_power: json.new_hash, rtm_balance: user.rtm_balance - installing.cost })
+      showToast('✓ ' + installing.name + ' installed!')
     } catch {
-      showToast('Network error — try again')
-    } finally {
-      setLoading(null)
+      showToast('Network error')
     }
+    setInstalling(null)
   }
 
   return (
     <div className="animate-page px-3 pt-3">
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
-        <div className="section-label" style={{ paddingBottom: 0 }}>
-          NODE INFRASTRUCTURE
-        </div>
+        <div className="section-label" style={{ paddingBottom: 0 }}>NODE INFRASTRUCTURE</div>
         <div className="font-mono text-xs" style={{ color: 'var(--rtm-amber)' }}>
-          BAL:{' '}
-          <span style={{ color: 'var(--rtm-text)' }}>
-            {Math.floor(user?.rtm_balance ?? 0).toLocaleString()} $RTM
-          </span>
+          BAL: <span style={{ color: 'var(--rtm-text)' }}>{Math.floor(user?.rtm_balance ?? 0).toLocaleString()} $RTM</span>
         </div>
       </div>
 
-      {/* Grouped upgrades */}
-      {['hardware', 'infrastructure', 'advanced'].map((cat) => (
-        <div key={cat} className="mb-4">
-          <div
-            className="font-mono text-xs mb-2 pb-1"
-            style={{
-              color:        'var(--rtm-muted)',
-              letterSpacing: '2px',
-              borderBottom: '1px solid var(--rtm-border)',
-            }}
-          >
-            — {CATEGORY_LABELS[cat]}
+      {/* Active install banner */}
+      {installing && (
+        <div style={{
+          background:   '#0a1020',
+          border:       `1px solid ${installing.done ? 'var(--rtm-green)' : 'var(--rtm-purple)'}`,
+          borderRadius: 6,
+          padding:      '12px',
+          marginBottom: 12,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, color: installing.done ? 'var(--rtm-green)' : 'var(--rtm-purple)' }}>
+              {installing.done ? '✓ INSTALL COMPLETE' : '⚙ INSTALLING...'}
+            </div>
+            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)' }}>
+              {installing.done ? 'Ready to activate' : formatTime(timeLeft) + ' left'}
+            </div>
           </div>
 
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 12, color: 'var(--rtm-text)', marginBottom: 8 }}>
+            {installing.name}
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ height: 4, background: '#1a2230', borderRadius: 2, overflow: 'hidden', marginBottom: 8 }}>
+            <div style={{
+              height:     '100%',
+              width:      progress + '%',
+              background: installing.done
+                ? 'var(--rtm-green)'
+                : 'linear-gradient(90deg, #3a2060, var(--rtm-purple))',
+              borderRadius: 2,
+              transition: 'width 1s linear',
+            }} />
+          </div>
+
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: 'var(--rtm-muted)', marginBottom: installing.done ? 10 : 0 }}>
+            {installing.done
+              ? 'Node ready — tap to activate and update your hash rate'
+              : `Initializing ${installing.name.toLowerCase()} hardware stack...`}
+          </div>
+
+          {installing.done && (
+            <button
+              onClick={completeInstall}
+              style={{
+                width:      '100%',
+                background: '#0a2a14',
+                border:     '1px solid var(--rtm-green)',
+                color:      'var(--rtm-green)',
+                fontFamily: "'Share Tech Mono'",
+                fontSize:   11,
+                padding:    '8px 0',
+                borderRadius: 3,
+                cursor:     'pointer',
+              }}
+            >
+              ✓ ACTIVATE NODE
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Upgrade groups */}
+      {['hardware', 'infrastructure', 'advanced'].map((cat) => (
+        <div key={cat} className="mb-4">
+          <div className="font-mono text-xs mb-2 pb-1" style={{
+            color: 'var(--rtm-muted)', letterSpacing: '2px',
+            borderBottom: '1px solid var(--rtm-border)',
+          }}>
+            — {CATEGORY_LABELS[cat]}
+          </div>
           <div className="flex flex-col gap-2">
             {(grouped[cat] ?? []).map((upgrade) => (
               <UpgradeCard
@@ -104,32 +249,141 @@ export default function Nodes() {
                 upgrade={upgrade}
                 node={nodeMap[upgrade.slug] ?? null}
                 balance={user?.rtm_balance ?? 0}
-                isLoading={loading === upgrade.slug}
-                onInstall={handleInstall}
+                isInstalling={installing?.slug === upgrade.slug && !installing.done}
+                onInstall={() => openPayModal(upgrade)}
               />
             ))}
           </div>
         </div>
       ))}
 
-      {/* Toast */}
+      {/* Payment modal */}
+      {payModal && (
+        <>
+          <div
+            onClick={() => setPayModal(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, backdropFilter: 'blur(4px)' }}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0,
+            background: '#0d1017', border: '1px solid #1a2230',
+            borderRadius: '12px 12px 0 0', zIndex: 51,
+            padding: '20px 16px 32px',
+          }}>
+            {/* Handle */}
+            <div style={{ width: 36, height: 4, background: '#1a2230', borderRadius: 2, margin: '0 auto 20px' }} />
+
+            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)', letterSpacing: '2px', marginBottom: 4 }}>
+              INSTALL NODE
+            </div>
+            <div style={{ fontFamily: "'Rajdhani'", fontSize: 20, fontWeight: 700, color: 'var(--rtm-text)', marginBottom: 4 }}>
+              {payModal.upgrade.name}
+            </div>
+            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)', marginBottom: 16 }}>
+              +{payModal.upgrade.hash_per_level} {payModal.upgrade.unit} · Install time: {formatTime(INSTALL_TIMERS[payModal.upgrade.slug] ?? 300)}
+            </div>
+
+            {/* Cost display */}
+            <div style={{
+              background: '#080a0f', border: '1px solid #1a2230',
+              borderRadius: 4, padding: '10px 12px', marginBottom: 16,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)' }}>COST</span>
+              <span style={{ fontFamily: "'Share Tech Mono'", fontSize: 16, color: 'var(--rtm-amber)', fontWeight: 700 }}>
+                {Math.floor(payModal.cost)} $RTM
+              </span>
+            </div>
+
+            {/* Payment options */}
+            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: 'var(--rtm-muted)', letterSpacing: '2px', marginBottom: 10 }}>
+              SELECT PAYMENT METHOD
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* RTM payment */}
+              <button
+                onClick={payWithRTM}
+                disabled={(user?.rtm_balance ?? 0) < payModal.cost}
+                style={{
+                  width:      '100%',
+                  background: (user?.rtm_balance ?? 0) < payModal.cost ? '#0a0d14' : '#0f0820',
+                  border:     `1px solid ${(user?.rtm_balance ?? 0) < payModal.cost ? '#1a2230' : 'var(--rtm-accent)'}`,
+                  color:      (user?.rtm_balance ?? 0) < payModal.cost ? 'var(--rtm-muted)' : 'var(--rtm-purple)',
+                  fontFamily: "'Share Tech Mono'",
+                  fontSize:   12,
+                  padding:    '12px',
+                  borderRadius: 4,
+                  cursor:     (user?.rtm_balance ?? 0) < payModal.cost ? 'not-allowed' : 'pointer',
+                  display:    'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>💜 Pay with $RTM</span>
+                <span style={{ fontSize: 11, color: (user?.rtm_balance ?? 0) < payModal.cost ? 'var(--rtm-red)' : 'var(--rtm-muted)' }}>
+                  {(user?.rtm_balance ?? 0) < payModal.cost
+                    ? 'Insufficient balance'
+                    : `Balance: ${Math.floor(user?.rtm_balance ?? 0).toLocaleString()} $RTM`}
+                </span>
+              </button>
+
+              {/* TON payment */}
+              <button
+                onClick={payWithTON}
+                style={{
+                  width:      '100%',
+                  background: '#0a1020',
+                  border:     '1px solid #0088cc',
+                  color:      '#00aaff',
+                  fontFamily: "'Share Tech Mono'",
+                  fontSize:   12,
+                  padding:    '12px',
+                  borderRadius: 4,
+                  cursor:     'pointer',
+                  display:    'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>💎 Pay with TON</span>
+                <span style={{ fontSize: 11, color: '#4a5a70' }}>Coming soon</span>
+              </button>
+
+              {/* Cancel */}
+              <button
+                onClick={() => setPayModal(null)}
+                style={{
+                  width:      '100%',
+                  background: 'none',
+                  border:     '1px solid #1a2230',
+                  color:      'var(--rtm-muted)',
+                  fontFamily: "'Share Tech Mono'",
+                  fontSize:   11,
+                  padding:    '10px',
+                  borderRadius: 4,
+                  cursor:     'pointer',
+                  marginTop:  4,
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
 
-function UpgradeCard({
-  upgrade,
-  node,
-  balance,
-  isLoading,
-  onInstall,
-}: {
-  upgrade:   UpgradeCatalogue
-  node:      UserNode | null
-  balance:   number
-  isLoading: boolean
-  onInstall: (slug: string) => void
+function UpgradeCard({ upgrade, node, balance, isInstalling, onInstall }: {
+  upgrade:      UpgradeCatalogue
+  node:         UserNode | null
+  balance:      number
+  isInstalling: boolean
+  onInstall:    () => void
 }) {
   const currentLevel = node?.level ?? 0
   const maxed        = currentLevel >= upgrade.max_level
@@ -137,77 +391,48 @@ function UpgradeCard({
   const canAfford    = balance >= cost
 
   return (
-    <div
-      className="rtm-card flex items-center gap-3 px-3 py-2.5 transition-all duration-200"
-      style={{
-        borderColor: maxed ? 'var(--rtm-border)' : undefined,
-        opacity:     maxed ? 0.65 : 1,
-      }}
-    >
-      {/* Icon */}
-      <div
-        className="flex items-center justify-center rounded text-lg flex-shrink-0"
-        style={{
-          width:  38,
-          height: 38,
-          border: '1px solid var(--rtm-border)',
-          background: 'var(--rtm-bg)',
-        }}
-      >
+    <div className="rtm-card flex items-center gap-3 px-3 py-2.5 transition-all duration-200"
+      style={{ opacity: maxed ? 0.6 : 1 }}>
+      <div className="flex items-center justify-center rounded text-lg flex-shrink-0"
+        style={{ width: 38, height: 38, border: '1px solid var(--rtm-border)', background: 'var(--rtm-bg)' }}>
         {upgrade.icon}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
-        <div
-          className="font-head font-semibold"
-          style={{ fontSize: 14, color: 'var(--rtm-text)' }}
-        >
+        <div className="font-head font-semibold" style={{ fontSize: 14, color: 'var(--rtm-text)' }}>
           {upgrade.name}
         </div>
-        <div
-          className="font-mono mt-0.5"
-          style={{ fontSize: 9, color: 'var(--rtm-muted)' }}
-        >
+        <div className="font-mono mt-0.5" style={{ fontSize: 9, color: 'var(--rtm-muted)' }}>
           {upgrade.description} · +{upgrade.hash_per_level} {upgrade.unit}/lvl
         </div>
-
-        {/* Level dots */}
         <div className="flex gap-1 mt-1.5">
           {Array.from({ length: upgrade.max_level }).map((_, i) => (
-            <div
-              key={i}
-              className={`lvl-dot${i < currentLevel ? ' filled' : ''}`}
-            />
+            <div key={i} className={`lvl-dot${i < currentLevel ? ' filled' : ''}`} />
           ))}
         </div>
       </div>
 
-      {/* Right side */}
       <div className="text-right flex-shrink-0" style={{ minWidth: 80 }}>
         {maxed ? (
           <div className="maxed-badge">MAXED</div>
+        ) : isInstalling ? (
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-purple)' }}>
+            INSTALLING
+          </div>
         ) : (
           <>
-            <div
-              className="font-mono"
-              style={{ fontSize: 11, color: 'var(--rtm-amber)' }}
-            >
+            <div className="font-mono" style={{ fontSize: 11, color: 'var(--rtm-amber)' }}>
               {Math.floor(cost)} $RTM
             </div>
-            <div
-              className="font-mono mt-0.5"
-              style={{ fontSize: 9, color: 'var(--rtm-green)' }}
-            >
+            <div className="font-mono mt-0.5" style={{ fontSize: 9, color: 'var(--rtm-green)' }}>
               +{upgrade.hash_per_level} {upgrade.unit}
             </div>
             <button
               className="btn-rtm mt-1.5 w-full"
-              disabled={!canAfford || isLoading}
-              onClick={() => onInstall(upgrade.slug)}
+              onClick={onInstall}
               style={{ fontSize: 10, padding: '3px 8px' }}
             >
-              {isLoading ? '...' : canAfford ? 'INSTALL' : 'NO FUNDS'}
+              INSTALL
             </button>
           </>
         )}
