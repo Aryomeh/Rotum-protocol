@@ -3,6 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // Don't protect the login page or login API
+  if (
+    pathname === '/admin/login' ||
+    pathname.startsWith('/api/admin/login')
+  ) {
+    return NextResponse.next()
+  }
+
   // Only protect /admin routes
   if (!pathname.startsWith('/admin')) return NextResponse.next()
 
