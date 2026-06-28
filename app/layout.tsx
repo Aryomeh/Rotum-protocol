@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Rotum Protocol',
-  description: 'Compete globally. Mine $RTM. Dominate the network.',
+  description: 'Compete globally. earn $RTM. Dominate the network.',
   icons: { icon: '/icon.png' },
 }
 
