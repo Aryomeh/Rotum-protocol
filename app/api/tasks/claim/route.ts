@@ -132,11 +132,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Post to network feed
-    await db.from('network_feed').insert({
-      type:    'task',
-      message: `An operator completed <b>${task.title}</b> and earned ${Math.floor(task.reward_rtm)} $RTM`,
-      color:   'green',
-    }).catch(() => {})
+    // Fixed: Removed invalid .catch() call from Supabase builder syntax
+    try {
+      await db.from('network_feed').insert({
+        type:    'task',
+        message: `An operator completed <b>${task.title}</b> and earned ${Math.floor(task.reward_rtm)} $RTM`,
+        color:   'green',
+      })
+    } catch (feedErr) {
+      console.warn('Failed to update network feed, but continuing:', feedErr)
+    }
 
     return NextResponse.json({ success: true, reward: task.reward_rtm })
   } catch (err: any) {
