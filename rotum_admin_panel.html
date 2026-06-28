@@ -1,0 +1,700 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#080a0f;--surface:#0d1017;--card:#111520;--border:#1a2230;
+    --purple:#9d7fd4;--accent:#7b5ea7;--green:#00e5a0;--amber:#f0a500;
+    --red:#ff4455;--text:#c0cce0;--muted:#4a5a70;
+    --mono:'Share Tech Mono',monospace;--head:'Rajdhani',sans-serif;
+  }
+  body{background:var(--bg);color:var(--text);font-family:var(--head);min-height:100vh}
+  h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between}
+  .topbar-title{font-family:var(--mono);font-size:13px;color:var(--purple);letter-spacing:3px;display:flex;align-items:center;gap:8px}
+  .admin-badge{background:#1a1030;border:1px solid var(--accent);color:var(--purple);font-size:9px;padding:2px 7px;border-radius:3px;letter-spacing:2px}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite;display:inline-block}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+  .layout{display:grid;grid-template-columns:180px 1fr;min-height:calc(100vh - 45px)}
+
+  .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:16px 0}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:9px 16px;font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--muted);cursor:pointer;transition:all .15s;border-left:2px solid transparent}
+  .nav-item:hover{color:var(--text);background:#0a0d14}
+  .nav-item.active{color:var(--purple);border-left-color:var(--purple);background:#0d0820}
+  .nav-section{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;padding:12px 16px 4px;opacity:.6}
+
+  .main{padding:20px;overflow-y:auto}
+  .page{display:none}.page.active{display:block}
+
+  .page-title{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:3px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+  .stat-card-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:6px}
+  .stat-card-val{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1}
+  .stat-card-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .panel-head{padding:10px 14px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;display:flex;align-items:center;justify-content:space-between}
+  .panel-body{padding:14px}
+
+  .form-row{margin-bottom:12px}
+  .form-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:5px;display:block}
+  .form-input{width:100%;background:#080a0f;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;border-radius:3px;outline:none;transition:border-color .2s}
+  .form-input:focus{border-color:var(--accent)}
+  .form-select{width:100%;background:#080a0f;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;border-radius:3px;outline:none}
+  .form-hint{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px}
+
+  .btn{font-family:var(--mono);font-size:11px;padding:7px 14px;border-radius:3px;cursor:pointer;letter-spacing:1px;transition:all .2s;border:none}
+  .btn-purple{background:#1a1030;border:1px solid var(--accent);color:var(--purple)}.btn-purple:hover{background:var(--accent);color:#fff}
+  .btn-green{background:#0a1a10;border:1px solid var(--green);color:var(--green)}.btn-green:hover{background:var(--green);color:#000}
+  .btn-red{background:#1a0810;border:1px solid var(--red);color:var(--red)}.btn-red:hover{background:var(--red);color:#fff}
+  .btn-amber{background:#1a1000;border:1px solid var(--amber);color:var(--amber)}.btn-amber:hover{background:var(--amber);color:#000}
+  .btn-full{width:100%;margin-top:8px}
+  .btn-sm{font-size:10px;padding:4px 10px}
+
+  .table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+  .table th{padding:7px 10px;text-align:left;color:var(--muted);font-size:9px;letter-spacing:1px;border-bottom:1px solid var(--border)}
+  .table td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text)}
+  .table tr:last-child td{border-bottom:none}
+  .table tr:hover td{background:#0a0d14}
+
+  .badge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:2px;letter-spacing:1px}
+  .badge-green{background:#0a2a14;border:1px solid #1a4a25;color:var(--green)}
+  .badge-amber{background:#1a1000;border:1px solid #3a2a00;color:var(--amber)}
+  .badge-red{background:#1a0810;border:1px solid #3a1020;color:var(--red)}
+  .badge-purple{background:#1a1030;border:1px solid var(--accent);color:var(--purple)}
+
+  .divider{height:1px;background:var(--border);margin:12px 0}
+
+  .feed-item{padding:7px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;display:flex;align-items:flex-start;gap:8px}
+  .feed-item:last-child{border-bottom:none}
+  .feed-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:3px}
+
+  .toggle-wrap{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+  .toggle-label{font-family:var(--mono);font-size:11px;color:var(--text)}
+  .toggle-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px}
+  .toggle{width:36px;height:20px;background:var(--border);border-radius:10px;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+  .toggle.on{background:var(--green)}
+  .toggle::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left .2s}
+  .toggle.on::after{left:19px}
+
+  .toast{position:fixed;bottom:20px;right:20px;background:#0f0820;border:1px solid var(--purple);color:var(--purple);font-family:var(--mono);font-size:11px;padding:10px 16px;border-radius:4px;z-index:999;display:none}
+  .toast.show{display:block;animation:toastin .3s ease}
+  @keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .section-divider{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:12px}
+
+  .connected-badge{font-family:var(--mono);font-size:9px;color:var(--green);background:#0a2a14;border:1px solid #1a4a25;padding:2px 8px;border-radius:2px}
+</style>
+
+<h2 class="sr-only">Rotum Protocol admin panel — manage seasons, pools, users, and network settings</h2>
+
+<div class="topbar">
+  <div class="topbar-title">
+    ROTUM PROTOCOL
+    <span class="admin-badge">ADMIN</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="connected-badge"><span class="status-dot" style="width:5px;height:5px;margin-right:4px"></span>SUPABASE LIVE</span>
+    <span style="font-family:var(--mono);font-size:10px;color:var(--muted)" id="clock">--:--:--</span>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="nav-section">OVERVIEW</div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Dashboard</div>
+    <div class="nav-item" onclick="showPage('season',this)">🏆 Season</div>
+
+    <div class="nav-section">CONTROL</div>
+    <div class="nav-item" onclick="showPage('pool',this)">💰 Pool & Mining</div>
+    <div class="nav-item" onclick="showPage('store',this)">🛒 Power Store</div>
+    <div class="nav-item" onclick="showPage('events',this)">⚡ Network Events</div>
+
+    <div class="nav-section">USERS</div>
+    <div class="nav-item" onclick="showPage('users',this)">👥 Operators</div>
+    <div class="nav-item" onclick="showPage('rewards',this)">🎁 Rewards</div>
+
+    <div class="nav-section">SYSTEM</div>
+    <div class="nav-item" onclick="showPage('feed',this)">📡 Feed</div>
+    <div class="nav-item" onclick="showPage('settings',this)">⚙️ Settings</div>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-title">📊 OVERVIEW</div>
+
+      <div class="stat-row">
+        <div class="stat-card" style="border-top:2px solid var(--purple)">
+          <div class="stat-card-label">TOTAL OPERATORS</div>
+          <div class="stat-card-val" style="color:var(--purple)" id="stat-users">248,142</div>
+          <div class="stat-card-sub">+312 today</div>
+        </div>
+        <div class="stat-card" style="border-top:2px solid var(--green)">
+          <div class="stat-card-label">SEASON POOL</div>
+          <div class="stat-card-val" style="color:var(--green)"><span id="stat-pool">102,450</span> $RTM</div>
+          <div class="stat-card-sub">Season 1 active</div>
+        </div>
+        <div class="stat-card" style="border-top:2px solid var(--amber)">
+          <div class="stat-card-label">ACTIVE TODAY</div>
+          <div class="stat-card-val" style="color:var(--amber)" id="stat-active">18,204</div>
+          <div class="stat-card-sub">Last 24 hours</div>
+        </div>
+        <div class="stat-card" style="border-top:2px solid #00ccdd">
+          <div class="stat-card-label">TOTAL PURCHASES</div>
+          <div class="stat-card-val" style="color:#00ccdd">⭐ 4,820</div>
+          <div class="stat-card-sub">Stars collected</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">SEASON STATUS</div>
+          <div class="panel-body">
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--green)"></span>
+              <div><div>Season 1 — Genesis Epoch</div><div style="color:var(--muted);font-size:9px;margin-top:2px">Active · 18 days remaining</div></div>
+            </div>
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--amber)"></span>
+              <div><div>Pool: 102,450 / 100,000 $RTM</div><div style="color:var(--muted);font-size:9px;margin-top:2px">102.4% filled from purchases</div></div>
+            </div>
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--purple)"></span>
+              <div><div>Network hash: 142.8 PH/s</div><div style="color:var(--muted);font-size:9px;margin-top:2px">Difficulty: 8.4T</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">RECENT ACTIVITY</div>
+          <div class="panel-body">
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--green)"></span>
+              <span>Operator #2141 → Quantum upgrade</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--amber)"></span>
+              <span>Purchase: Accelerator Pack ⭐100</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--purple)"></span>
+              <span>New operator joined via referral</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-dot" style="background:var(--green)"></span>
+              <span>Season pool updated: +⭐50</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEASON -->
+    <div class="page" id="page-season">
+      <div class="page-title">🏆 SEASON MANAGEMENT</div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">CURRENT SEASON</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">SEASON NAME</label>
+              <input class="form-input" value="Genesis Epoch" id="season-name">
+            </div>
+            <div class="form-row">
+              <label class="form-label">STATUS</label>
+              <select class="form-select" id="season-status">
+                <option value="active" selected>Active</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="ended">Ended</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">END DATE</label>
+              <input class="form-input" type="date" id="season-end">
+            </div>
+            <button class="btn btn-purple btn-full" onclick="saveAction('Season updated')">SAVE SEASON</button>
+            <button class="btn btn-red btn-full" style="margin-top:6px" onclick="confirmAction('End season early and distribute rewards?','Season ended — rewards queued')">END SEASON EARLY</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">REWARD TIERS</div>
+          <div class="panel-body">
+            <div class="section-divider">POOL DISTRIBUTION</div>
+            <div class="form-row">
+              <label class="form-label">TOP 10 SHARE (%)</label>
+              <input class="form-input" type="number" value="40" id="tier-top10">
+            </div>
+            <div class="form-row">
+              <label class="form-label">TOP 100 SHARE (%)</label>
+              <input class="form-input" type="number" value="30" id="tier-top100">
+            </div>
+            <div class="form-row">
+              <label class="form-label">TOP 1,000 SHARE (%)</label>
+              <input class="form-input" type="number" value="20" id="tier-top1000">
+            </div>
+            <div class="form-row">
+              <label class="form-label">RANDOM ACTIVE (%)</label>
+              <input class="form-input" type="number" value="10" id="tier-random">
+              <div class="form-hint">Must total 100%</div>
+            </div>
+            <button class="btn btn-purple btn-full" onclick="saveAction('Reward tiers saved')">SAVE TIERS</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POOL & MINING -->
+    <div class="page" id="page-pool">
+      <div class="page-title">💰 POOL & MINING CONTROL</div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">SET SEASON POOL</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">POOL AMOUNT ($RTM)</label>
+              <input class="form-input" type="number" value="100000" id="pool-amount" placeholder="e.g. 100000">
+              <div class="form-hint">Total $RTM to distribute this season</div>
+            </div>
+            <div class="form-row">
+              <label class="form-label">DISTRIBUTION PERIOD</label>
+              <select class="form-select" id="pool-period">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly" selected>Monthly (Season end)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">PAYOUT TIMING</label>
+              <select class="form-select" id="pool-timing">
+                <option value="auto">Auto — at period end</option>
+                <option value="manual">Manual — admin triggers</option>
+              </select>
+            </div>
+            <button class="btn btn-green btn-full" onclick="saveAction('Pool set to ' + document.getElementById('pool-amount').value + ' $RTM')">SET POOL</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">MINING RATE</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">BASE RATE (1 TH/s = ? $RTM/day)</label>
+              <input class="form-input" type="number" step="0.01" value="2.00" id="mine-rate" placeholder="e.g. 2.00">
+              <div class="form-hint">How much $RTM each unit of hash power earns daily</div>
+            </div>
+            <div class="form-row">
+              <label class="form-label">MINING STATUS</label>
+              <select class="form-select" id="mine-status">
+                <option value="active" selected>Active — users earn continuously</option>
+                <option value="paused">Paused — no earnings</option>
+                <option value="boosted">Boosted — multiplier active</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">GLOBAL MULTIPLIER</label>
+              <input class="form-input" type="number" step="0.1" value="1.0" id="mine-mult" placeholder="e.g. 1.5 for 1.5×">
+              <div class="form-hint">1.0 = normal · 2.0 = double mining event</div>
+            </div>
+            <button class="btn btn-green btn-full" onclick="saveAction('Mining rate updated')">APPLY RATE</button>
+            <button class="btn btn-amber btn-full" style="margin-top:6px" onclick="saveAction('Manual payout triggered')">TRIGGER PAYOUT NOW</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POWER STORE -->
+    <div class="page" id="page-store">
+      <div class="page-title">🛒 POWER STORE MANAGEMENT</div>
+      <div class="panel" style="margin-bottom:12px">
+        <div class="panel-head">STORE ITEMS <span style="color:var(--green);font-size:9px">EDIT PRICES & STATUS</span></div>
+        <div class="panel-body">
+          <table class="table">
+            <thead><tr><th>ITEM</th><th>STARS PRICE</th><th>RTM PRICE</th><th>EFFECT</th><th>STATUS</th><th>ACTION</th></tr></thead>
+            <tbody id="store-table">
+              <tr>
+                <td>⚡ Hash Boost (24h)</td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="25"></td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="25"></td>
+                <td style="color:var(--muted)">2× rate 24h</td>
+                <td><span class="badge badge-green">ON</span></td>
+                <td><button class="btn btn-purple btn-sm" onclick="saveAction('Hash Boost updated')">SAVE</button></td>
+              </tr>
+              <tr>
+                <td>📦 Mining Crate</td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="50"></td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="50"></td>
+                <td style="color:var(--muted)">Random item</td>
+                <td><span class="badge badge-green">ON</span></td>
+                <td><button class="btn btn-purple btn-sm" onclick="saveAction('Mining Crate updated')">SAVE</button></td>
+              </tr>
+              <tr>
+                <td>🚀 Accelerator Pack</td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="100"></td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="100"></td>
+                <td style="color:var(--muted)">+10% perm</td>
+                <td><span class="badge badge-green">ON</span></td>
+                <td><button class="btn btn-purple btn-sm" onclick="saveAction('Accelerator updated')">SAVE</button></td>
+              </tr>
+              <tr>
+                <td>🔮 Validator Slot</td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="200"></td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="200"></td>
+                <td style="color:var(--muted)">Unlock tier</td>
+                <td><span class="badge badge-amber">OFF</span></td>
+                <td><button class="btn btn-purple btn-sm" onclick="saveAction('Validator Slot updated')">SAVE</button></td>
+              </tr>
+              <tr>
+                <td>⚛️ Quantum Upgrade</td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="500"></td>
+                <td><input class="form-input" style="width:70px;padding:4px 6px" value="500"></td>
+                <td style="color:var(--muted)">Unlock tier</td>
+                <td><span class="badge badge-amber">OFF</span></td>
+                <td><button class="btn btn-purple btn-sm" onclick="saveAction('Quantum updated')">SAVE</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">MANUAL PURCHASE CREDIT</div>
+        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:flex-end">
+          <div>
+            <label class="form-label">TELEGRAM ID</label>
+            <input class="form-input" placeholder="e.g. 123456789" id="credit-user">
+          </div>
+          <div>
+            <label class="form-label">ITEM</label>
+            <select class="form-select" id="credit-item">
+              <option>Hash Boost (24h)</option>
+              <option>Mining Crate</option>
+              <option>Accelerator Pack</option>
+              <option>Validator Slot</option>
+              <option>Quantum Upgrade</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">REASON</label>
+            <input class="form-input" placeholder="e.g. manual payment" id="credit-reason">
+          </div>
+          <button class="btn btn-green" onclick="saveAction('Item credited to user')">CREDIT</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NETWORK EVENTS -->
+    <div class="page" id="page-events">
+      <div class="page-title">⚡ NETWORK EVENTS</div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">ACTIVE EVENT</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">EVENT TYPE</label>
+              <select class="form-select" id="evt-type">
+                <option value="none">— No active event —</option>
+                <option value="network_surge">Network Surge (hash +X%)</option>
+                <option value="bull_market">Bull Market (earn +X%)</option>
+                <option value="whale_injection">Whale Injection (pool +X $RTM)</option>
+                <option value="difficulty_spike">Difficulty Spike (hash -X%)</option>
+                <option value="quantum_discovery">Quantum Discovery</option>
+                <option value="hardware_failure">Hardware Failure</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">MULTIPLIER / AMOUNT</label>
+              <input class="form-input" type="number" step="0.1" value="1.5" id="evt-mult" placeholder="e.g. 1.5 or 5000">
+              <div class="form-hint">For surge: 1.5 = +50% hash · For injection: amount in $RTM</div>
+            </div>
+            <div class="form-row">
+              <label class="form-label">DURATION (hours)</label>
+              <input class="form-input" type="number" value="6" id="evt-duration" placeholder="e.g. 6">
+            </div>
+            <button class="btn btn-amber btn-full" onclick="saveAction('Network event activated')">ACTIVATE EVENT</button>
+            <button class="btn btn-red btn-full" style="margin-top:6px" onclick="saveAction('Event cancelled')">CANCEL EVENT</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">SCHEDULED EVENTS</div>
+          <div class="panel-body">
+            <table class="table">
+              <thead><tr><th>TYPE</th><th>STARTS</th><th>STATUS</th></tr></thead>
+              <tbody>
+                <tr><td>Network Surge</td><td style="color:var(--muted)">In 2 days</td><td><span class="badge badge-amber">SCHEDULED</span></td></tr>
+                <tr><td>Bull Market</td><td style="color:var(--muted)">In 7 days</td><td><span class="badge badge-amber">SCHEDULED</span></td></tr>
+                <tr><td>Season End</td><td style="color:var(--muted)">In 18 days</td><td><span class="badge badge-purple">AUTO</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="page" id="page-users">
+      <div class="page-title">👥 OPERATOR MANAGEMENT</div>
+      <div class="panel" style="margin-bottom:12px">
+        <div class="panel-head">
+          SEARCH OPERATOR
+          <div style="display:flex;gap:8px">
+            <input class="form-input" style="width:200px;padding:4px 8px" placeholder="Telegram ID or username" id="user-search">
+            <button class="btn btn-purple btn-sm" onclick="saveAction('User found')">SEARCH</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <table class="table">
+            <thead><tr><th>TELEGRAM ID</th><th>NAME</th><th>HASH POWER</th><th>BALANCE</th><th>RANK</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+            <tbody>
+              <tr>
+                <td style="color:var(--muted)">99182744</td>
+                <td>0x_ShadowMiner</td>
+                <td style="color:var(--green)">4.2 PH/s</td>
+                <td style="color:var(--amber)">1,240 $RTM</td>
+                <td style="color:var(--purple)">#1</td>
+                <td><span class="badge badge-green">ACTIVE</span></td>
+                <td style="display:flex;gap:4px">
+                  <button class="btn btn-purple btn-sm" onclick="showToast('Edit user panel — sync with DB')">EDIT</button>
+                  <button class="btn btn-red btn-sm" onclick="confirmAction('Ban this operator?','Operator banned')">BAN</button>
+                </td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted)">77341209</td>
+                <td>NeuralHash_Alpha</td>
+                <td style="color:var(--green)">3.8 PH/s</td>
+                <td style="color:var(--amber)">980 $RTM</td>
+                <td style="color:var(--purple)">#2</td>
+                <td><span class="badge badge-green">ACTIVE</span></td>
+                <td style="display:flex;gap:4px">
+                  <button class="btn btn-purple btn-sm" onclick="showToast('Edit user panel — sync with DB')">EDIT</button>
+                  <button class="btn btn-red btn-sm" onclick="confirmAction('Ban this operator?','Operator banned')">BAN</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">MANUAL $RTM CREDIT</div>
+        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:flex-end">
+          <div>
+            <label class="form-label">TELEGRAM ID</label>
+            <input class="form-input" placeholder="123456789" id="rtm-user">
+          </div>
+          <div>
+            <label class="form-label">AMOUNT ($RTM)</label>
+            <input class="form-input" type="number" placeholder="e.g. 500" id="rtm-amount">
+          </div>
+          <div>
+            <label class="form-label">REASON</label>
+            <input class="form-input" placeholder="e.g. season bonus" id="rtm-reason">
+          </div>
+          <button class="btn btn-green" onclick="saveAction('$RTM credited to operator')">CREDIT $RTM</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- REWARDS -->
+    <div class="page" id="page-rewards">
+      <div class="page-title">🎁 REWARD DISTRIBUTION</div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">DISTRIBUTE REWARDS</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">SEASON</label>
+              <select class="form-select">
+                <option>Season 1 — Genesis Epoch (Active)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">POOL TO DISTRIBUTE ($RTM)</label>
+              <input class="form-input" type="number" value="102450" id="dist-pool">
+              <div class="form-hint">Current pool: 102,450 $RTM</div>
+            </div>
+            <div style="background:#080a0f;border:1px solid var(--border);border-radius:4px;padding:10px;margin-bottom:12px">
+              <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">PREVIEW</div>
+              <div style="font-family:var(--mono);font-size:11px;display:flex;flex-direction:column;gap:4px">
+                <div>TOP 10 → <span style="color:var(--amber)">40,980 $RTM</span> / 10 users = <span style="color:var(--green)">4,098 $RTM each</span></div>
+                <div>TOP 100 → <span style="color:var(--amber)">30,735 $RTM</span> / 90 users = <span style="color:var(--green)">341 $RTM each</span></div>
+                <div>TOP 1K → <span style="color:var(--amber)">20,490 $RTM</span> / 900 users = <span style="color:var(--green)">22 $RTM each</span></div>
+                <div>RANDOM → <span style="color:var(--amber)">10,245 $RTM</span> shared</div>
+              </div>
+            </div>
+            <button class="btn btn-green btn-full" onclick="confirmAction('Distribute 102,450 $RTM to all winners? This cannot be undone.','Rewards distributed successfully')">DISTRIBUTE NOW</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">RECENT DISTRIBUTIONS</div>
+          <div class="panel-body">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:20px">
+              No previous seasons yet.<br>Season 1 rewards pending.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FEED -->
+    <div class="page" id="page-feed">
+      <div class="page-title">📡 NETWORK FEED</div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">POST TO FEED</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">MESSAGE</label>
+              <textarea class="form-input" rows="3" id="feed-msg" placeholder="e.g. Network surge event active — hash rates +50%!" style="resize:none"></textarea>
+            </div>
+            <div class="form-row">
+              <label class="form-label">COLOR</label>
+              <select class="form-select" id="feed-color">
+                <option value="accent">Purple (accent)</option>
+                <option value="green">Green (positive)</option>
+                <option value="amber">Amber (warning)</option>
+              </select>
+            </div>
+            <button class="btn btn-purple btn-full" onclick="saveAction('Message posted to network feed')">POST TO FEED</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">FEED SETTINGS</div>
+          <div class="panel-body">
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">Auto block validation feed</div><div class="toggle-sub">Generates block # events automatically</div></div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">Auto upgrade announcements</div><div class="toggle-sub">Posts when users hit advanced tiers</div></div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">Auto pool milestone alerts</div><div class="toggle-sub">Posts when pool hits 25%, 50%, 75%, 100%</div></div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">Show scripted seed events</div><div class="toggle-sub">Fills feed with plausible fake events</div></div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="page-title">⚙️ SYSTEM SETTINGS</div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">APP CONFIG</div>
+          <div class="panel-body">
+            <div class="form-row">
+              <label class="form-label">APP NAME</label>
+              <input class="form-input" value="Rotum Protocol">
+            </div>
+            <div class="form-row">
+              <label class="form-label">TICKER</label>
+              <input class="form-input" value="$RTM">
+            </div>
+            <div class="form-row">
+              <label class="form-label">STARTER BALANCE (new users)</label>
+              <input class="form-input" type="number" value="120">
+              <div class="form-hint">$RTM given to each new operator on join</div>
+            </div>
+            <div class="form-row">
+              <label class="form-label">MAX NODES PER USER</label>
+              <input class="form-input" type="number" value="12">
+            </div>
+            <button class="btn btn-purple btn-full" onclick="saveAction('App config saved')">SAVE CONFIG</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">MAINTENANCE</div>
+          <div class="panel-body">
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">Maintenance mode</div><div class="toggle-sub">Blocks all user access</div></div>
+              <div class="toggle" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">New registrations</div><div class="toggle-sub">Allow new operators to join</div></div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="toggle-wrap">
+              <div><div class="toggle-label">Purchases enabled</div><div class="toggle-sub">Allow Stars payments</div></div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="divider"></div>
+            <button class="btn btn-red btn-full" style="margin-top:8px" onclick="confirmAction('Refresh all season rankings now?','Rankings refreshed')">REFRESH RANKINGS NOW</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+  document.getElementById('page-' + id).classList.add('active')
+  el.classList.add('active')
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast')
+  t.textContent = '✓ ' + msg
+  t.classList.add('show')
+  setTimeout(() => t.classList.remove('show'), 2800)
+}
+
+function saveAction(msg) { showToast(msg) }
+
+function confirmAction(question, successMsg) {
+  if (confirm(question)) showToast(successMsg)
+}
+
+function updateClock() {
+  const now = new Date()
+  document.getElementById('clock').textContent =
+    [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(n => String(n).padStart(2, '0')).join(':') + ' UTC'
+}
+
+updateClock()
+setInterval(updateClock, 1000)
+
+// Animate pool counter
+let pool = 102450
+setInterval(() => {
+  pool += Math.floor(Math.random() * 3) + 1
+  const el = document.getElementById('stat-pool')
+  if (el) el.textContent = pool.toLocaleString()
+}, 4000)
+
+// Set today's date as default for season end
+const endInput = document.getElementById('season-end')
+if (endInput) {
+  const d = new Date(Date.now() + 18 * 86400000)
+  endInput.value = d.toISOString().split('T')[0]
+}
+</script>
