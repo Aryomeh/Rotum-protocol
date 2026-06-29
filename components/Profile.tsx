@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import { supabase } from '@/lib/supabase'
+import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react'
 
 interface ProfileProps {
   onClose: () => void
@@ -16,9 +17,13 @@ export default function Profile({ onClose }: ProfileProps) {
   const { user } = useStore()
   const [referralStats, setReferralStats] = useState<ReferralStats>({ total: 0, bonus: 0 })
   const [copied, setCopied]               = useState(false)
-  const [walletConnected, setWallet]      = useState(false)
-  const [walletAddress, setWalletAddr]    = useState('')
   const [loading, setLoading]             = useState(true)
+
+  // Real TON Connect Hooks
+  const [tonConnectUI] = useTonConnectUI()
+  // Returns a user-friendly format (e.g., EQD... or UQD...) or an empty string if not connected
+  const userFriendlyAddress = useTonAddress() 
+  const walletConnected = !!userFriendlyAddress
 
   useEffect(() => {
     if (user) loadReferralStats()
@@ -53,11 +58,28 @@ export default function Profile({ onClose }: ProfileProps) {
     }
   }
 
-  // TON wallet connect placeholder
+  // Trigger the official TON connection modal selector
   async function connectWallet() {
-    // Will be replaced with real TON Connect in Phase 3
-    setWallet(true)
-    setWalletAddr('UQD...coming soon')
+    try {
+      await tonConnectUI.openModal()
+    } catch (error) {
+      console.error("Failed to open TON Connect modal", error)
+    }
+  }
+
+  // Handle disconnecting the active wallet session
+  async function disconnectWallet() {
+    try {
+      await tonConnectUI.disconnect()
+    } catch (error) {
+      console.error("Failed to disconnect wallet", error)
+    }
+  }
+
+  // Helper to slice long raw string formats nicely inside your UI container
+  function formatAddress(addr: string) {
+    if (!addr) return ''
+    return `${addr.slice(0, 4)}...${addr.slice(-4)}`
   }
 
   const joinDate = user?.joined_at
@@ -262,10 +284,10 @@ export default function Profile({ onClose }: ProfileProps) {
                 borderRadius: 4, padding: '8px 10px', marginBottom: 8,
                 fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-green)',
               }}>
-                ● {walletAddress}
+                ● {formatAddress(userFriendlyAddress)}
               </div>
               <button
-                onClick={() => { setWallet(false); setWalletAddr('') }}
+                onClick={disconnectWallet}
                 style={{
                   width: '100%', background: '#1a0810',
                   border: '1px solid var(--rtm-red)', color: 'var(--rtm-red)',

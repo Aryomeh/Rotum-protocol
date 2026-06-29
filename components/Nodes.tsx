@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import { nextLevelCost } from '@/lib/hash'
+import { NODE_TON_PRICES, toNano } from '@/lib/tonconnect'
+import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react'
 import type { UpgradeCatalogue, UserNode } from '@/lib/types'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -10,7 +12,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   advanced:       'ADVANCED',
 }
 
-// Install timer durations in seconds
 const INSTALL_TIMERS: Record<string, number> = {
   cpu_cluster:       5 * 60,
   gpu_farm:          15 * 60,
@@ -38,6 +39,11 @@ export default function Nodes() {
   const [payModal, setPayModal] = useState<{ upgrade: UpgradeCatalogue; cost: number } | null>(null)
   const [progress, setProgress] = useState(0)
   const [timeLeft, setTimeLeft] = useState(0)
+  const [processingTon, setProcessingTon] = useState(false)
+
+  // TON React UI hooks
+  const [tonConnectUI] = useTonConnectUI()
+  const walletAddress = useTonAddress()
 
   const nodeMap = Object.fromEntries(userNodes.map((n) => [n.upgrade_slug, n]))
 
@@ -47,7 +53,6 @@ export default function Nodes() {
     return acc
   }, {})
 
-  // Progress timer
   useEffect(() => {
     if (!installing || installing.done) return
     const id = setInterval(() => {
@@ -96,20 +101,63 @@ export default function Nodes() {
 
   async function payWithTON() {
     if (!payModal || !user) return
-    const { upgrade, cost } = payModal
-    // TON payment will be wired in Phase 3
-    // For now show coming soon
-    showToast('💎 TON payment coming soon')
+    const { upgrade } = payModal
+
+    if (!walletAddress) {
+      showToast('Please connect your TON wallet first inside your Profile')
+      return
+    }
+
+    const tonPrice = NODE_TON_PRICES[upgrade.slug] ?? 1.0
+    setProcessingTon(true)
+
+    try {
+      // 1. Post to your new route to store transaction intent and get unique payload memo
+      const initRes = await fetch('/api/ton-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          slug: upgrade.slug,
+          action: 'initiate'
+        }),
+      })
+      const initData = await initRes.json()
+      if (!initData.success) throw new Error(initData.error || 'Initialization rejected')
+
+      // 2. Format request payload for client wallet execution
+      const transactionPayload = {
+        validUntil: Math.floor(Date.now() / 1000) + 360, 
+        messages: [
+          {
+            address: initData.merchantWallet, 
+            amount: toNano(tonPrice), // Already output as a precise string from your config file
+            payload: btoa(initData.payloadBody) // Encode tracking UUID to valid base64 cell payload comment
+          }
+        ]
+      }
+
+      await tonConnectUI.sendTransaction(transactionPayload)
+      
+      // 3. Close payment UI and kickoff installer
+      setPayModal(null)
+      await startInstall(upgrade, 0)
+      showToast('💎 Transaction sent! Installing node...')
+    } catch (err: any) {
+      showToast(err?.message || 'TON Payment cancelled')
+    } finally {
+      setProcessingTon(false)
+    }
   }
 
   async function startInstall(upgrade: UpgradeCatalogue, cost: number) {
     if (!user) return
     const duration = INSTALL_TIMERS[upgrade.slug] ?? 5 * 60
 
-    // Deduct balance optimistically
-    setUser({ ...user, rtm_balance: user.rtm_balance - cost })
+    if (cost > 0) {
+      setUser({ ...user, rtm_balance: user.rtm_balance - cost })
+    }
 
-    // Start install timer
     setInstalling({
       slug:      upgrade.slug,
       name:      upgrade.name,
@@ -135,8 +183,9 @@ export default function Nodes() {
 
       if (!json.success) {
         showToast(json.error ?? 'Install failed')
-        // Refund
-        setUser({ ...user, rtm_balance: user.rtm_balance + installing.cost })
+        if (installing.cost > 0) {
+          setUser({ ...user, rtm_balance: user.rtm_balance + installing.cost })
+        }
         setInstalling(null)
         return
       }
@@ -193,7 +242,6 @@ export default function Nodes() {
             {installing.name}
           </div>
 
-          {/* Progress bar */}
           <div style={{ height: 4, background: '#1a2230', borderRadius: 2, overflow: 'hidden', marginBottom: 8 }}>
             <div style={{
               height:     '100%',
@@ -261,7 +309,7 @@ export default function Nodes() {
       {payModal && (
         <>
           <div
-            onClick={() => setPayModal(null)}
+            onClick={() => !processingTon && setPayModal(null)}
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, backdropFilter: 'blur(4px)' }}
           />
           <div style={{
@@ -270,7 +318,6 @@ export default function Nodes() {
             borderRadius: '12px 12px 0 0', zIndex: 51,
             padding: '20px 16px 32px',
           }}>
-            {/* Handle */}
             <div style={{ width: 36, height: 4, background: '#1a2230', borderRadius: 2, margin: '0 auto 20px' }} />
 
             <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)', letterSpacing: '2px', marginBottom: 4 }}>
@@ -283,41 +330,38 @@ export default function Nodes() {
               +{payModal.upgrade.hash_per_level} {payModal.upgrade.unit} · Install time: {formatTime(INSTALL_TIMERS[payModal.upgrade.slug] ?? 300)}
             </div>
 
-            {/* Cost display */}
-            <div style={{
-              background: '#080a0f', border: '1px solid #1a2230',
-              borderRadius: 4, padding: '10px 12px', marginBottom: 16,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <span style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)' }}>COST</span>
-              <span style={{ fontFamily: "'Share Tech Mono'", fontSize: 16, color: 'var(--rtm-amber)', fontWeight: 700 }}>
-                {Math.floor(payModal.cost)} $RTM
-              </span>
+            {/* Alternating dual-currency box option split layout */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              <div style={{ background: '#080a0f', border: '1px solid #1a2230', borderRadius: 4, padding: '10px' }}>
+                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 8, color: 'var(--rtm-muted)' }}>RTM PRICE</div>
+                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 14, color: 'var(--rtm-purple)', fontWeight: 700, marginTop: 2 }}>
+                  {Math.floor(payModal.cost)} $RTM
+                </div>
+              </div>
+              <div style={{ background: '#080a0f', border: '1px solid #1a2230', borderRadius: 4, padding: '10px' }}>
+                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 8, color: 'var(--rtm-muted)' }}>TON PRICE</div>
+                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 14, color: '#00aaff', fontWeight: 700, marginTop: 2 }}>
+                  {NODE_TON_PRICES[payModal.upgrade.slug] ?? 1.0} TON
+                </div>
+              </div>
             </div>
 
-            {/* Payment options */}
             <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: 'var(--rtm-muted)', letterSpacing: '2px', marginBottom: 10 }}>
               SELECT PAYMENT METHOD
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* RTM payment */}
               <button
                 onClick={payWithRTM}
-                disabled={(user?.rtm_balance ?? 0) < payModal.cost}
+                disabled={(user?.rtm_balance ?? 0) < payModal.cost || processingTon}
                 style={{
                   width:      '100%',
                   background: (user?.rtm_balance ?? 0) < payModal.cost ? '#0a0d14' : '#0f0820',
                   border:     `1px solid ${(user?.rtm_balance ?? 0) < payModal.cost ? '#1a2230' : 'var(--rtm-accent)'}`,
                   color:      (user?.rtm_balance ?? 0) < payModal.cost ? 'var(--rtm-muted)' : 'var(--rtm-purple)',
-                  fontFamily: "'Share Tech Mono'",
-                  fontSize:   12,
-                  padding:    '12px',
-                  borderRadius: 4,
-                  cursor:     (user?.rtm_balance ?? 0) < payModal.cost ? 'not-allowed' : 'pointer',
-                  display:    'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  fontFamily: "'Share Tech Mono'", fontSize: 12, padding: '12px', borderRadius: 4,
+                  cursor:     ((user?.rtm_balance ?? 0) < payModal.cost || processingTon) ? 'not-allowed' : 'pointer',
+                  display:    'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}
               >
                 <span>💜 Pay with $RTM</span>
@@ -328,42 +372,32 @@ export default function Nodes() {
                 </span>
               </button>
 
-              {/* TON payment */}
               <button
                 onClick={payWithTON}
+                disabled={processingTon}
                 style={{
                   width:      '100%',
                   background: '#0a1020',
                   border:     '1px solid #0088cc',
                   color:      '#00aaff',
-                  fontFamily: "'Share Tech Mono'",
-                  fontSize:   12,
-                  padding:    '12px',
-                  borderRadius: 4,
-                  cursor:     'pointer',
-                  display:    'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  fontFamily: "'Share Tech Mono'", fontSize: 12, padding: '12px', borderRadius: 4,
+                  cursor:     processingTon ? 'not-allowed' : 'pointer',
+                  display:    'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}
               >
-                <span>💎 Pay with TON</span>
-                <span style={{ fontSize: 11, color: '#4a5a70' }}>Coming soon</span>
+                <span>💎 {processingTon ? 'AWAITING WALLET...' : 'Pay with TON'}</span>
+                <span style={{ fontSize: 11, color: '#6ab6ff' }}>
+                  {!walletAddress ? 'Wallet Disconnected' : 'Ready'}
+                </span>
               </button>
 
-              {/* Cancel */}
               <button
                 onClick={() => setPayModal(null)}
+                disabled={processingTon}
                 style={{
-                  width:      '100%',
-                  background: 'none',
-                  border:     '1px solid #1a2230',
-                  color:      'var(--rtm-muted)',
-                  fontFamily: "'Share Tech Mono'",
-                  fontSize:   11,
-                  padding:    '10px',
-                  borderRadius: 4,
-                  cursor:     'pointer',
-                  marginTop:  4,
+                  width: '100%', background: 'none', border: '1px solid #1a2230', color: 'var(--rtm-muted)',
+                  fontFamily: "'Share Tech Mono'", fontSize: 11, padding: '10px', borderRadius: 4,
+                  cursor: processingTon ? 'not-allowed' : 'pointer', marginTop: 4,
                 }}
               >
                 CANCEL
@@ -388,7 +422,6 @@ function UpgradeCard({ upgrade, node, balance, isInstalling, onInstall }: {
   const currentLevel = node?.level ?? 0
   const maxed        = currentLevel >= upgrade.max_level
   const cost         = nextLevelCost(upgrade, currentLevel)
-  const canAfford    = balance >= cost
 
   return (
     <div className="rtm-card flex items-center gap-3 px-3 py-2.5 transition-all duration-200"

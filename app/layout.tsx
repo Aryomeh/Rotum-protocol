@@ -1,33 +1,31 @@
 import type { Metadata, Viewport } from 'next'
+import TonProvider from '@/components/TonProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Rotum Protocol',
-  description: 'Compete globally. earn $RTM. Dominate the network.',
+  description: 'Compete globally. Mine $RTM. Dominate the network.',
   icons: { icon: '/icon.png' },
 }
 
 export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: '#080a0f',
+  width:          'device-width',
+  initialScale:   1,
+  maximumScale:   1,
+  userScalable:   false,
+  themeColor:     '#080a0f',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
-        {/* Telegram Mini Apps SDK */}
         <script src="https://telegram.org/js/telegram-web-app.js" />
       </head>
       <body className="antialiased">
-        {children}
+        <TonProvider>
+          {children}
+        </TonProvider>
       </body>
     </html>
   )
