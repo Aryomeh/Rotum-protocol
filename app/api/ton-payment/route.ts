@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { NODE_TON_PRICES, STORE_TON_PRICES } from '@/lib/ton-prices' // 👈 CHANGED THIS IMPORT LINE
 
 export async function POST(req: Request) {
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       const orderId = crypto.randomUUID()
 
       // 3. Register the intent as pending in the 'purchases' ledger inside Supabase
-    const { error } = await supabase
+    const { error } = await getSupabaseAdmin()  // 👈 was: supabase
         .from('purchases')
         .insert({
             id: orderId,
