@@ -126,13 +126,14 @@ export default function Nodes() {
       if (!initData.success) throw new Error(initData.error || 'Initialization rejected')
 
       // 2. Format request payload for client wallet execution
+      // Nodes.tsx — inside payWithTON, replace transactionPayload with this:
       const transactionPayload = {
-        validUntil: Math.floor(Date.now() / 1000) + 360, 
+        validUntil: Math.floor(Date.now() / 1000) + 360,
         messages: [
           {
-            address: initData.merchantWallet, 
-            amount: toNano(tonPrice), // Already output as a precise string from your config file
-            payload: btoa(initData.payloadBody) // Encode tracking UUID to valid base64 cell payload comment
+            address: initData.merchantWallet,
+            amount: toNano(tonPrice),
+            // no payload field at all
           }
         ]
       }
