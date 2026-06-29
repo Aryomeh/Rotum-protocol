@@ -29,15 +29,17 @@ export async function POST(req: Request) {
 
       const orderId = crypto.randomUUID()
 
-      const { error } = await supabase
+      // 3. Register the intent as pending in the 'purchases' ledger inside Supabase
+    const { error } = await supabase
         .from('purchases')
         .insert({
-          id: orderId,
-          user_id: userId,
-          item_slug: slug,
-          amount_ton: tonPrice,
-          status: 'pending',
-          created_at: new Date().toISOString()
+            id: orderId,
+            user_id: userId,
+            item_slug: slug,
+            item_name: slug.replace('_', ' ').toUpperCase(), // 👈 Added this to fulfill 'item_name' requirement
+            amount_ton: tonPrice, // 👈 This matches your custom numeric column perfectly now
+            status: 'pending',
+            purchased_at: new Date().toISOString() // 👈 CHANGED THIS FROM 'created_at' TO MATCH YOUR SCHEMA
         })
 
       if (error) {
