@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       const orderId = crypto.randomUUID()
 
       const { error } = await supabase
-        .from('ton_transactions')
+        .from('purchases')
         .insert({
           id: orderId,
           user_id: userId,
