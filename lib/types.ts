@@ -11,11 +11,16 @@ export interface User {
   hash_boost: number
   boost_expires_at: string | null
   rtm_balance: number
+  nft_minted?:     boolean
+  nft_minted_at?:  string | null
+  nft_item_index?: number | null
+  nft_wallet?:     string | null
   rtm_earned_total: number
   uptime_pct: number
   last_active_at: string
   joined_at: string
   is_banned: boolean
+  
 }
 
 export interface Season {
