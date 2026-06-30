@@ -1,4 +1,5 @@
 'use client'
+
 import { useStore } from '@/store/useStore'
 import { formatHashRate } from '@/lib/hash'
 
@@ -30,11 +31,16 @@ export default function Leaderboard() {
         ) : (
           rankings.map((r) => {
             const isYou = r.user_id === user?.id
+
             return (
               <RankRow
                 key={r.user_id}
                 rank={r.rank}
-                name={r.telegram_name ?? r.telegram_username ?? `Operator #${r.rank}`}
+                name={
+                  r.telegram_name ??
+                  r.telegram_username ??
+                  `Operator #${r.rank}`
+                }
                 hash={formatHashRate(r.hash_power)}
                 reward={`${Math.floor(r.est_reward).toLocaleString()} $RTM`}
                 isYou={isYou}
@@ -56,23 +62,28 @@ export default function Leaderboard() {
       <div
         className="rounded-md px-3 py-2.5 flex justify-between items-center"
         style={{
-          background:  '#0d0820',
-          border:      '1px solid var(--rtm-purple)',
+          background: '#0d0820',
+          border: '1px solid var(--rtm-purple)',
         }}
       >
         <span className="rtm-badge">YOU</span>
+
         <span
           className="font-mono text-xs"
           style={{ color: 'var(--rtm-text)' }}
         >
           #{(myRank?.rank ?? '—').toLocaleString()} of 248,142
         </span>
+
         <span
           className="font-mono text-xs"
           style={{ color: 'var(--rtm-green)' }}
         >
           EST.{' '}
-          {myRank ? Math.floor(myRank.est_reward).toLocaleString() : '0'} $RTM
+          {myRank
+            ? Math.floor(myRank.est_reward).toLocaleString()
+            : '0'}{' '}
+          $RTM
         </span>
       </div>
 
@@ -83,22 +94,27 @@ export default function Leaderboard() {
       >
         <div
           className="font-mono mb-2"
-          style={{ fontSize: 9, color: 'var(--rtm-muted)', letterSpacing: '2px' }}
+          style={{
+            fontSize: 9,
+            color: 'var(--rtm-muted)',
+            letterSpacing: '2px',
+          }}
         >
           REWARD TIERS
         </div>
+
         {[
-          { tier: '🥇 TOP 10',         pct: '40%', avg: '4,098 $RTM' },
-          { tier: '🥈 TOP 100',        pct: '30%', avg: '342 $RTM'   },
-          { tier: '🥉 TOP 1,000',      pct: '20%', avg: '23 $RTM'    },
-          { tier: '⚡ RANDOM ACTIVE',  pct: '10%', avg: 'varies'      },
+          { tier: '🥇 TOP 10', pct: '40%', avg: '4,098 $RTM' },
+          { tier: '🥈 TOP 100', pct: '30%', avg: '342 $RTM' },
+          { tier: '🥉 TOP 1,000', pct: '20%', avg: '23 $RTM' },
+          { tier: '⚡ RANDOM ACTIVE', pct: '10%', avg: 'varies' },
         ].map((row) => (
           <div
             key={row.tier}
             className="flex justify-between font-mono py-1"
             style={{
-              fontSize:    11,
-              color:       'var(--rtm-text)',
+              fontSize: 11,
+              color: 'var(--rtm-text)',
               borderBottom: '1px solid var(--rtm-border)',
             }}
           >
@@ -119,35 +135,57 @@ function RankRow({
   reward,
   isYou,
 }: {
-  rank:   number
-  name:   string
-  hash:   string
+  rank: number
+  name: string
+  hash: string
   reward: string
-  isYou:  boolean
+  isYou: boolean
 }) {
-  const isMedal    = rank <= 3
-  const rankColor  = isMedal ? MEDAL_COLORS[rank - 1] : 'var(--rtm-muted)'
-  const rankLabel  = isMedal ? MEDALS[rank - 1] : `#${rank}`
+  const isMedal = rank <= 3
+  const rankColor = isMedal
+    ? MEDAL_COLORS[rank - 1]
+    : 'var(--rtm-muted)'
+  const rankLabel = isMedal ? MEDALS[rank - 1] : `#${rank}`
 
   return (
     <div
       className="rtm-card flex items-center gap-2 px-3 py-2"
-      style={isYou ? { borderColor: 'var(--rtm-purple)', background: '#0d0820' } : {}}
+      style={
+        isYou
+          ? {
+              borderColor: 'var(--rtm-purple)',
+              background: '#0d0820',
+            }
+          : {}
+      }
     >
       <div
         className="font-mono font-bold text-center flex-shrink-0"
-        style={{ width: 32, fontSize: 13, color: rankColor }}
+        style={{
+          width: 32,
+          fontSize: 13,
+          color: rankColor,
+        }}
       >
         {rankLabel}
       </div>
 
       <div
         className="font-mono flex-1 truncate"
-        style={{ fontSize: 11, color: isYou ? 'var(--rtm-purple)' : 'var(--rtm-text)' }}
+        style={{
+          fontSize: 11,
+          color: isYou
+            ? 'var(--rtm-purple)'
+            : 'var(--rtm-text)',
+        }}
       >
         {name}
+
         {isYou && (
-          <span className="rtm-badge ml-2" style={{ fontSize: 8 }}>
+          <span
+            className="rtm-badge ml-2"
+            style={{ fontSize: 8 }}
+          >
             YOU
           </span>
         )}
@@ -155,14 +193,21 @@ function RankRow({
 
       <div
         className="font-mono flex-shrink-0"
-        style={{ fontSize: 10, color: 'var(--rtm-muted)' }}
+        style={{
+          fontSize: 10,
+          color: 'var(--rtm-muted)',
+        }}
       >
         {hash}
       </div>
 
       <div
         className="font-mono text-right flex-shrink-0"
-        style={{ fontSize: 10, color: 'var(--rtm-green)', minWidth: 80 }}
+        style={{
+          fontSize: 10,
+          color: 'var(--rtm-green)',
+          minWidth: 80,
+        }}
       >
         {reward}
       </div>
@@ -170,32 +215,21 @@ function RankRow({
   )
 }
 
-// Shown while real data loads — uses plausible fake entries
+// Shown while real data loads
 function PlaceholderRows() {
   return (
-    <div style={{
-      fontFamily: "'Share Tech Mono'",
-      fontSize: 10,
-      color: 'var(--rtm-muted)',
-      textAlign: 'center',
-      padding: '30px 0',
-    }}>
-      No operators ranked yet.<br/>
+    <div
+      style={{
+        fontFamily: "'Share Tech Mono'",
+        fontSize: 10,
+        color: 'var(--rtm-muted)',
+        textAlign: 'center',
+        padding: '30px 0',
+      }}
+    >
+      No operators ranked yet.
+      <br />
       Rankings update every 5 minutes.
     </div>
-  )
-  return (
-    <>
-      {rows.map((r) => (
-        <RankRow
-          key={r.rank}
-          rank={r.rank}
-          name={r.name}
-          hash={r.hash}
-          reward={r.reward}
-          isYou={false}
-        />
-      ))}
-    </>
   )
 }
