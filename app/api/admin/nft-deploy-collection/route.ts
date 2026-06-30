@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { WalletContractV4, TonClient } from '@ton/ton'
 import { mnemonicToWalletKey } from '@ton/crypto'
-import { AssetsSDK, createApi, PinataStorage } from '@ton-community/assets-sdk'
+import { AssetsSDK, PinataStorage } from '@ton-community/assets-sdk'
 
 export const runtime = 'nodejs'
 
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
     const key    = await mnemonicToWalletKey(mnemonic.split(' '))
     const wallet = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey })
 
-    // 2. Check balance
+    // 2. Use TonClient (v2 JSON-RPC) directly — avoids TonClient4/ton-access
+    //    which returns malformed responses from Vercel's network
     const client = new TonClient({
       endpoint: network === 'mainnet'
         ? 'https://toncenter.com/api/v2/jsonRPC'
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
       apiKey: process.env.TONCENTER_API_KEY,
     })
 
+    // 3. Check balance
     let balance: bigint
     try {
       balance = await client.getBalance(wallet.address)
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // 3. Test Pinata connectivity before doing anything on-chain
+    // 4. Test Pinata connectivity
     const storage = PinataStorage.create({ pinataApiKey, pinataSecretKey })
     try {
       const testUrl = await storage.uploadFile(Buffer.from('{"test":true}'))
@@ -64,19 +66,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, step: 'pinata_test', error: e.message }, { status: 500 })
     }
 
-    // 4. Set up SDK
-    let api: any
-    try {
-      api = await createApi(network)
-    } catch (e: any) {
-      return NextResponse.json({ success: false, step: 'createApi', error: e.message }, { status: 500 })
-    }
-
-    const openedWallet = api.open(wallet)
+    // 5. Use TonClient directly as the api (it satisfies TonClientApi interface)
+    const openedWallet = client.open(wallet)
     const sender       = openedWallet.sender(key.secretKey)
-    const sdk          = AssetsSDK.create({ api, sender, storage })
+    const sdk          = AssetsSDK.create({ api: client, sender, storage })
 
-    // 5. Deploy collection
+    // 6. Deploy collection
     const collection = await sdk.deployNftCollection(
       {
         collectionContent: {
