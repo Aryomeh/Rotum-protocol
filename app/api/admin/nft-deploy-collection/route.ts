@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { WalletContractV5R1, TonClient } from '@ton/ton'
+import { WalletContractV4, TonClient } from '@ton/ton'
 import { mnemonicToWalletKey } from '@ton/crypto'
 import { AssetsSDK, createApi, PinataStorage } from '@ton-community/assets-sdk'
 
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Derive W5 wallet from mnemonic
     const key    = await mnemonicToWalletKey(mnemonic.split(' '))
-    const wallet = WalletContractV5R1.create({ workchain: 0, publicKey: key.publicKey })
+    const wallet = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey })
 
     // 2. Check balance before attempting deploy
     const client = new TonClient({
