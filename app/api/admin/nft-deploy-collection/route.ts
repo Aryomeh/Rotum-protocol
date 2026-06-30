@@ -1,137 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { WalletContractV4, TonClient } from '@ton/ton'
+import { WalletContractV5R1, TonClient } from '@ton/ton'
 import { mnemonicToWalletKey } from '@ton/crypto'
-import { AssetsSDK, createApi } from '@ton-community/assets-sdk'
+import { AssetsSDK, createApi, PinataStorage } from '@ton-community/assets-sdk'
 
 export const runtime = 'nodejs'
-
-// ── ONE-TIME ADMIN ROUTE ─────────────────────────────────────────────
-// Deploys the "Early Contributor" NFT collection on TON testnet.
-// Call this exactly once, save the returned collectionAddress as
-// NFT_COLLECTION_ADDRESS in your env vars, then delete this route file
-// (or at minimum rotate NFT_DEPLOY_SECRET so it can't be re-triggered).
-// ──────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({} as { secret?: string }))
     const { secret } = body as { secret?: string }
 
-    if (
-      !process.env.NFT_DEPLOY_SECRET ||
-      secret !== process.env.NFT_DEPLOY_SECRET
-    ) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      )
+    if (!process.env.NFT_DEPLOY_SECRET || secret !== process.env.NFT_DEPLOY_SECRET) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
     const mnemonic = process.env.NFT_MINT_MNEMONIC
     if (!mnemonic) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'NFT_MINT_MNEMONIC not configured',
-        },
-        { status: 500 }
-      )
+      return NextResponse.json({ success: false, error: 'NFT_MINT_MNEMONIC not configured' }, { status: 500 })
+    }
+
+    const pinataApiKey    = process.env.PINATA_API_KEY
+    const pinataSecretKey = process.env.PINATA_SECRET_KEY
+    if (!pinataApiKey || !pinataSecretKey) {
+      return NextResponse.json({ success: false, error: 'PINATA_API_KEY or PINATA_SECRET_KEY not configured' }, { status: 500 })
     }
 
     const network: 'testnet' | 'mainnet' =
       process.env.TON_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 
-    // 1. Derive your existing wallet from its mnemonic
-    const key = await mnemonicToWalletKey(mnemonic.split(' '))
-    const wallet = WalletContractV4.create({
-      workchain: 0,
-      publicKey: key.publicKey,
-    })
+    // 1. Derive W5 wallet from mnemonic
+    const key    = await mnemonicToWalletKey(mnemonic.split(' '))
+    const wallet = WalletContractV5R1.create({ workchain: 0, publicKey: key.publicKey })
 
-    // 2. Set up the TonClient + assets-sdk API wrapper
-    const api = await createApi(network)
-    const openedWallet = api.open(wallet)
-
-    // Test wallet connectivity first
+    // 2. Check balance before attempting deploy
     const client = new TonClient({
-      endpoint:
-        network === 'mainnet'
-          ? 'https://toncenter.com/api/v2/jsonRPC'
-          : 'https://testnet.toncenter.com/api/v2/jsonRPC',
+      endpoint: network === 'mainnet'
+        ? 'https://toncenter.com/api/v2/jsonRPC'
+        : 'https://testnet.toncenter.com/api/v2/jsonRPC',
       apiKey: process.env.TONCENTER_API_KEY,
     })
-
     const balance = await client.getBalance(wallet.address)
-
-    console.log('Wallet:', wallet.address.toString())
-    console.log('Balance:', balance.toString())
-
-    // 3. Build a Sender from your wallet
-    const sender = openedWallet.sender(key.secretKey)
-
-    // 4. Set up the SDK
-    const sdk = AssetsSDK.create({ api, sender })
-
-    const collectionMetadataUrl =
-      process.env.NFT_COLLECTION_METADATA_URL
-    const itemBaseUrl = process.env.NFT_ITEM_BASE_URL
-
-    if (!collectionMetadataUrl || !itemBaseUrl) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'Set NFT_COLLECTION_METADATA_URL and NFT_ITEM_BASE_URL env vars first (your Supabase Storage URLs).',
-        },
-        { status: 400 }
-      )
-    }
-
-    // Verify that Vercel can actually access the metadata files
-    const collectionRes = await fetch(collectionMetadataUrl!)
-    const itemRes = await fetch(`${itemBaseUrl!}0.json`)
-
-    return NextResponse.json({
-    success: true,
-    collectionStatus: collectionRes.status,
-    itemStatus: itemRes.status,
-    collectionText: await collectionRes.text(),
-    itemText: await itemRes.text(),
-    })
-
-    // 5. Deploy the "Early Contributor" collection
-    try {
-    const collection = await sdk.deployNftCollection(
-        {
-        collectionContent: {
-            uri: collectionMetadataUrl!,
-        },
-        commonContent: itemBaseUrl!,
-        },
-        {
-        adminAddress: wallet.address,
-        }
-    )
-
-    return NextResponse.json({
-        success: true,
-        collectionAddress: collection.address.toString({
-        testOnly: network !== 'mainnet',
-        }),
-        network,
-        message:
-        'Collection deployed. Wait ~10-20s, verify on testnet explorer, then save collectionAddress as NFT_COLLECTION_ADDRESS in your env vars.',
-    })
-    } catch (e: any) {
-    console.error('DEPLOY ERROR', e)
-
-    return NextResponse.json(
-        {
+    if (balance < 100_000_000n) {
+      return NextResponse.json({
         success: false,
-        step: 'deployNftCollection',
-        error: e?.message,
-        stack: e?.stack,
-        },
-        { status: 500 }
-    )
+        error: `Wallet balance too low (${Number(balance) / 1e9} TON). Need at least 0.1 TON.`,
+        walletAddress: wallet.address.toString({ testOnly: network !== 'mainnet' }),
+      }, { status: 400 })
     }
+
+    // 3. Set up SDK with Pinata storage + W5 sender
+    const api          = await createApi(network)
+    const openedWallet = api.open(wallet)
+    const sender       = openedWallet.sender(key.secretKey)
+    const storage      = PinataStorage.create({ pinataApiKey, pinataSecretKey })
+    const sdk          = AssetsSDK.create({ api, sender, storage })
+
+    // 4. Deploy the Early Contributor NFT collection
+    //    SDK uploads collection metadata to IPFS via Pinata automatically
+    const collection = await sdk.deployNftCollection(
+      {
+        collectionContent: {
+          name:        'Early Contributor',
+          description: 'Awarded to early Rotum Protocol contributors',
+          image:       process.env.NFT_COVER_IMAGE_URL ?? 'https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/nft.png',
+        },
+        commonContent: '', // per-item metadata uploaded at mint time
+      },
+      {
+        adminAddress: wallet.address,
+      }
+    )
+
+    return NextResponse.json({
+      success: true,
+      collectionAddress: collection.address.toString({ testOnly: network !== 'mainnet' }),
+      network,
+      message: 'Collection deployed. Save collectionAddress as NFT_COLLECTION_ADDRESS in Vercel env vars, then delete this route.',
+    })
+  } catch (err: any) {
+    console.error('NFT deploy error:', err)
+    return NextResponse.json({ success: false, error: err.message || 'Deploy failed' }, { status: 500 })
+  }
+}
