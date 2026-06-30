@@ -40,24 +40,22 @@ export async function POST(req: NextRequest) {
     const api = await createApi(network)
     const openedWallet = api.open(wallet)
 
-    // Sanity check: make sure the wallet actually has funds before deploying
+    // Test wallet connectivity first
     const client = new TonClient({
-      endpoint: network === 'mainnet'
+    endpoint: network === 'mainnet'
         ? 'https://toncenter.com/api/v2/jsonRPC'
         : 'https://testnet.toncenter.com/api/v2/jsonRPC',
-      apiKey: process.env.TONCENTER_API_KEY,
+    apiKey: process.env.TONCENTER_API_KEY,
     })
+
     const balance = await client.getBalance(wallet.address)
-    if (balance < 100_000_000n) { // 0.1 TON in nanoTON
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Wallet balance too low (${Number(balance) / 1e9} TON). Need at least 0.1 TON to deploy.`,
-          walletAddress: wallet.address.toString({ testOnly: network !== 'mainnet' }),
-        },
-        { status: 400 }
-      )
-    }
+
+    return NextResponse.json({
+    success: true,
+    address: wallet.address.toString({ testOnly: true }),
+    balance: balance.toString(),
+    network,
+    })
 
     // 3. Build a Sender from your W5 wallet (built-in method, no custom wrapper needed)
     const sender = openedWallet.sender(key.secretKey)
