@@ -38,11 +38,14 @@ const btn = (color: string, bg: string, border: string): React.CSSProperties => 
   letterSpacing: '1px', marginTop: 8,
 })
 
+const AIRDROP_RESERVE = 6_000_000 // 60% of 10M supply
+
 export default function AdminSeason() {
-  const [season, setSeason]     = useState<Season | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(false)
-  const [toast, setToast]       = useState('')
+  const [season, setSeason]         = useState<Season | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [saving, setSaving]         = useState(false)
+  const [toast, setToast]           = useState('')
+  const [totalSpent, setTotalSpent] = useState(0)
 
   // Form state
   const [name, setName]         = useState('')
@@ -70,12 +73,35 @@ export default function AdminSeason() {
       setStatus(data.status)
       setEndsAt(data.ends_at?.split('T')[0] ?? '')
     }
+
+    // Sum all pool_size across every season to compute remaining airdrop reserve
+    const { data: allSeasons } = await supabase
+      .from('seasons')
+      .select('pool_size')
+    if (allSeasons) {
+      const spent = allSeasons.reduce((sum, s) => sum + (s.pool_size ?? 0), 0)
+      setTotalSpent(spent)
+    }
+
     setLoading(false)
   }
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 2800)
+  }
+
+  async function resetPool() {
+    if (!season) return
+    if (!confirm('Reset pool_current and pool_size to 0 for this season?')) return
+    setSaving(true)
+    const { error } = await supabase
+      .from('seasons')
+      .update({ pool_current: 0, pool_size: 0 })
+      .eq('id', season.id)
+    if (error) showToast('❌ Error: ' + error.message)
+    else { showToast('✓ Pool reset to 0'); loadSeason() }
+    setSaving(false)
   }
 
   async function saveSeason() {
@@ -143,6 +169,32 @@ export default function AdminSeason() {
         🏆 SEASON MANAGEMENT
       </div>
 
+      {/* Airdrop Reserve Banner */}
+      <div style={{
+        background: '#0a0d14', border: '1px solid #1a2230',
+        borderRadius: 6, padding: '12px 14px', marginBottom: 12,
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12,
+      }}>
+        <div>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', letterSpacing: '1px', marginBottom: 4 }}>TOTAL AIRDROP RESERVE</div>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#f0a500', fontWeight: 700 }}>
+            {AIRDROP_RESERVE.toLocaleString()} $RTM
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', letterSpacing: '1px', marginBottom: 4 }}>ALLOCATED TO SEASONS</div>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#ff4455', fontWeight: 700 }}>
+            {totalSpent.toLocaleString()} $RTM
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', letterSpacing: '1px', marginBottom: 4 }}>REMAINING BALANCE</div>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#00e5a0', fontWeight: 700 }}>
+            {(AIRDROP_RESERVE - totalSpent).toLocaleString()} $RTM
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 
         {/* Current season */}
@@ -192,6 +244,10 @@ export default function AdminSeason() {
                 </span></div>
               </div>
             </div>
+
+            <button style={{ ...btn('#ff4455', '#1a0810', '#ff4455'), marginTop: 8 }} disabled={saving} onClick={resetPool}>
+              RESET POOL TO 0
+            </button>
 
             <button style={btn('#9d7fd4', '#0f0820', '#7b5ea7')} disabled={saving} onClick={saveSeason}>
               {saving ? 'SAVING...' : 'SAVE SEASON'}

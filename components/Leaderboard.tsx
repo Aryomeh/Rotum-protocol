@@ -172,16 +172,19 @@ function RankRow({
 
 // Shown while real data loads — uses plausible fake entries
 function PlaceholderRows() {
-  const rows = [
-    { rank: 1, name: '0x_ShadowMiner_PRO', hash: '4.2 PH/s',  reward: '4,214 $RTM' },
-    { rank: 2, name: 'NeuralHash_Alpha',   hash: '3.8 PH/s',  reward: '3,991 $RTM' },
-    { rank: 3, name: 'CryptoVault_X9',     hash: '3.1 PH/s',  reward: '3,508 $RTM' },
-    { rank: 4, name: 'QuantumNode_77',     hash: '2.7 PH/s',  reward: '3,102 $RTM' },
-    { rank: 5, name: 'DarkPool_Omega',     hash: '2.4 PH/s',  reward: '2,876 $RTM' },
-    { rank: 6, name: 'ByteStorm_Elite',    hash: '2.1 PH/s',  reward: '2,541 $RTM' },
-    { rank: 7, name: 'HexMiner_9000',      hash: '1.9 PH/s',  reward: '2,303 $RTM' },
-    { rank: 8, name: 'CipherNode_Delta',   hash: '1.7 PH/s',  reward: '2,118 $RTM' },
-  ]
+  return (
+    <div style={{
+      fontFamily: "'Share Tech Mono'",
+      fontSize: 10,
+      color: 'var(--rtm-muted)',
+      textAlign: 'center',
+      padding: '30px 0',
+    }}>
+      No operators ranked yet.<br/>
+      Rankings update every 5 minutes.
+    </div>
+  )
+}
   return (
     <>
       {rows.map((r) => (
