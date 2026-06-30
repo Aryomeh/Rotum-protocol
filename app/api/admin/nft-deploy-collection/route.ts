@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const api = await createApi(network)
     const openedWallet = api.open(wallet)
 
-    // TEMP DEBUG: Test wallet connectivity first
+    // Test wallet connectivity first
     const client = new TonClient({
       endpoint:
         network === 'mainnet'
@@ -89,34 +89,49 @@ export async function POST(req: NextRequest) {
 
     // 5. Deploy the "Early Contributor" collection
     try {
-        const collection = await sdk.deployNftCollection(
-            {
-                collectionContent: {
-                    uri: collectionMetadataUrl!,
-                },
-                commonContent: itemBaseUrl!,
-            },
-            {
-                adminAddress: wallet.address,
-            }
-        )
+      const collection = await sdk.deployNftCollection(
+        {
+          collectionContent: {
+            uri: collectionMetadataUrl!,
+          },
+          commonContent: itemBaseUrl!,
+        },
+        {
+          adminAddress: wallet.address,
+        }
+      )
 
-        return NextResponse.json({
-            success: true,
-            collectionAddress: collection.address.toString({
-                testOnly: network !== 'mainnet',
-            }),
-        })
+      return NextResponse.json({
+        success: true,
+        collectionAddress: collection.address.toString({
+          testOnly: network !== 'mainnet',
+        }),
+        network,
+        message:
+          'Collection deployed. Wait ~10-20s, verify on testnet explorer, then save collectionAddress as NFT_COLLECTION_ADDRESS in your env vars.',
+      })
     } catch (e: any) {
-        console.error('DEPLOY ERROR', e)
+      console.error('DEPLOY ERROR', e)
 
-        return NextResponse.json(
-            {
-                success: false,
-                step: 'deployNftCollection',
-                error: e?.message,
-                stack: e?.stack,
-            },
-            { status: 500 }
-        )
+      return NextResponse.json(
+        {
+          success: false,
+          step: 'deployNftCollection',
+          error: e?.message,
+          stack: e?.stack,
+        },
+        { status: 500 }
+      )
     }
+  } catch (err: any) {
+    console.error('NFT collection deploy error:', err)
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: err?.message || 'Deploy failed',
+      },
+      { status: 500 }
+    )
+  }
+}
