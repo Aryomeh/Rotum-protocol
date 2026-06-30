@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { WalletContractV5R1, TonClient } from '@ton/ton'
+import { WalletContractV4, TonClient } from '@ton/ton'
 import { mnemonicToWalletKey } from '@ton/crypto'
 import { AssetsSDK, createApi } from '@ton-community/assets-sdk'
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Derive your existing W5 wallet from its mnemonic
     const key = await mnemonicToWalletKey(mnemonic.split(' '))
-    const wallet = WalletContractV5R1.create({ workchain: 0, publicKey: key.publicKey })
+    const wallet = WalletContractV4.create({workchain: 0,publicKey: key.publicKey})
 
     // 2. Set up the TonClient + assets-sdk API wrapper
     const api = await createApi(network)
