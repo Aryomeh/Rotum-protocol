@@ -12,6 +12,7 @@ export const NODE_TON_PRICES: Record<string, number> = {
 }
 
 export const STORE_TON_PRICES: Record<string, number> = {
+  early_contributor: 1.0,  // 👈 just add this line
   premium_skin_01:   2.0,
   hash_booster_2x:   4.5,
   energy_recharge:   0.2,
