@@ -184,7 +184,6 @@ function PlaceholderRows() {
       Rankings update every 5 minutes.
     </div>
   )
-}
   return (
     <>
       {rows.map((r) => (
