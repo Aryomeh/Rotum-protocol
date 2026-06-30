@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { WalletContractV4, TonClient, internal } from '@ton/ton'
+import { WalletContractV4, TonClient } from '@ton/ton'
 import { mnemonicToWalletKey } from '@ton/crypto'
 import { AssetsSDK, PinataStorage } from '@ton-community/assets-sdk'
 import { Address, toNano } from '@ton/core'
@@ -39,14 +39,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const mnemonic = process.env.NFT_MINT_MNEMONIC
+    const mnemonic          = process.env.NFT_MINT_MNEMONIC
     const collectionAddress = process.env.NFT_COLLECTION_ADDRESS
-    const pinataApiKey    = process.env.PINATA_API_KEY
-    const pinataSecretKey = process.env.PINATA_SECRET_KEY
+    const pinataApiKey      = process.env.PINATA_API_KEY
+    const pinataSecretKey   = process.env.PINATA_SECRET_KEY
 
     if (!mnemonic || !collectionAddress || !pinataApiKey || !pinataSecretKey) {
       return NextResponse.json(
-        { success: false, error: 'Missing NFT env vars (MNEMONIC, COLLECTION_ADDRESS, PINATA keys)' },
+        { success: false, error: 'Missing NFT env vars' },
         { status: 500 }
       )
     }
@@ -64,9 +64,9 @@ export async function POST(req: NextRequest) {
       apiKey: process.env.TONCENTER_API_KEY,
     })
 
-    // 3. Check minting wallet has enough TON for gas
+    // 3. Check minting wallet balance
     const balance = await client.getBalance(wallet.address)
-    if (balance < 100_000_000n) { // 0.1 TON
+    if (balance < 100_000_000n) {
       return NextResponse.json(
         { success: false, error: `Mint wallet low on funds: ${Number(balance) / 1e9} TON` },
         { status: 500 }
@@ -79,44 +79,54 @@ export async function POST(req: NextRequest) {
     const sender       = openedWallet.sender(key.secretKey)
     const sdk          = AssetsSDK.create({ api: client, sender, storage })
 
-    // 5. Open the existing collection
+    // 5. Open existing collection
     const collection = sdk.openNftCollection(Address.parse(collectionAddress))
 
-    // 6. Get next item index from the collection
-    const { nextItemIndex } = await collection.getCollectionData()
+    // 6. Get next item index — correct method is getData(), not getCollectionData()
+    const { nextItemIndex } = await collection.getData()
 
-    // 7. Mint the NFT to the user's connected wallet address
-    await collection.sendMint(sender, {
-      value:         toNano('0.05'), // gas for the mint transaction
-      queryId:       0,
-      itemIndex:     nextItemIndex,
-      itemOwnerAddress: Address.parse(walletAddress),
-      itemContent:   {
-        name:        'Early Contributor',
-        description: 'Awarded to early Rotum Protocol contributors',
-        image:       process.env.NFT_COVER_IMAGE_URL
+    // 7. Mint — correct shape: { index, owner, individualContent, value? }
+    await collection.sendMint(
+      sender,
+      {
+        index:             nextItemIndex,
+        owner:             Address.parse(walletAddress),
+        individualContent: process.env.NFT_COVER_IMAGE_URL
           ?? 'https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/nft.png',
+        value:             toNano('0.05'),
       },
-      amount: toNano('0.05'),
-    })
+      { value: toNano('0.07') } // total tx value (covers mint + forwarding)
+    )
 
-    // 8. Record the mint in Supabase so we don't double-mint
+    // 8. Apply rewards + mark as minted in Supabase
+    const { data: userData } = await db
+      .from('users')
+      .select('rtm_balance, hash_power')
+      .eq('id', userId)
+      .single()
+
     await db
       .from('users')
       .update({
-        nft_minted:      true,
-        nft_minted_at:   new Date().toISOString(),
-        nft_item_index:  Number(nextItemIndex),
-        nft_wallet:      walletAddress,
+        nft_minted:     true,
+        nft_minted_at:  new Date().toISOString(),
+        nft_item_index: Number(nextItemIndex),
+        nft_wallet:     walletAddress,
+        rtm_balance:    (userData?.rtm_balance ?? 0) + 1000,
+        hash_power:     (userData?.hash_power  ?? 0) * 2,
       })
       .eq('id', userId)
 
     return NextResponse.json({
-      success: true,
+      success:   true,
       itemIndex: Number(nextItemIndex),
       mintedTo:  walletAddress,
       network,
-      message:   'NFT minted successfully. It will appear in the wallet within ~30s.',
+      rewards: {
+        rtm:      '+1,000 $RTM',
+        hashRate: '2× permanent',
+      },
+      message: 'NFT minted. Rewards applied. It will appear in your wallet within ~30s.',
     })
   } catch (err: any) {
     console.error('NFT mint error:', err)
