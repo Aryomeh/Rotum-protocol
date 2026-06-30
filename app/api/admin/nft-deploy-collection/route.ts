@@ -87,51 +87,51 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Verify that Vercel can actually access the metadata files
+    const collectionRes = await fetch(collectionMetadataUrl!)
+    const itemRes = await fetch(`${itemBaseUrl!}0.json`)
+
+    return NextResponse.json({
+    success: true,
+    collectionStatus: collectionRes.status,
+    itemStatus: itemRes.status,
+    collectionText: await collectionRes.text(),
+    itemText: await itemRes.text(),
+    })
+
     // 5. Deploy the "Early Contributor" collection
     try {
-      const collection = await sdk.deployNftCollection(
+    const collection = await sdk.deployNftCollection(
         {
-          collectionContent: {
+        collectionContent: {
             uri: collectionMetadataUrl!,
-          },
-          commonContent: itemBaseUrl!,
+        },
+        commonContent: itemBaseUrl!,
         },
         {
-          adminAddress: wallet.address,
+        adminAddress: wallet.address,
         }
-      )
+    )
 
-      return NextResponse.json({
+    return NextResponse.json({
         success: true,
         collectionAddress: collection.address.toString({
-          testOnly: network !== 'mainnet',
+        testOnly: network !== 'mainnet',
         }),
         network,
         message:
-          'Collection deployed. Wait ~10-20s, verify on testnet explorer, then save collectionAddress as NFT_COLLECTION_ADDRESS in your env vars.',
-      })
+        'Collection deployed. Wait ~10-20s, verify on testnet explorer, then save collectionAddress as NFT_COLLECTION_ADDRESS in your env vars.',
+    })
     } catch (e: any) {
-      console.error('DEPLOY ERROR', e)
-
-      return NextResponse.json(
-        {
-          success: false,
-          step: 'deployNftCollection',
-          error: e?.message,
-          stack: e?.stack,
-        },
-        { status: 500 }
-      )
-    }
-  } catch (err: any) {
-    console.error('NFT collection deploy error:', err)
+    console.error('DEPLOY ERROR', e)
 
     return NextResponse.json(
-      {
+        {
         success: false,
-        error: err?.message || 'Deploy failed',
-      },
-      { status: 500 }
+        step: 'deployNftCollection',
+        error: e?.message,
+        stack: e?.stack,
+        },
+        { status: 500 }
     )
-  }
-}
+    }
