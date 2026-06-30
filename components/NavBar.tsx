@@ -5,6 +5,7 @@ import type { AppStore } from '@/lib/types'
 const TABS: { id: AppStore['activeTab']; label: string }[] = [
   { id: 'dash',   label: '$RTM'  },
   { id: 'nodes',  label: 'NODES' },
+  { id: 'store',  label: 'STORE'  }, // 👈 add this
   { id: 'ranks',  label: 'RANKS' },
   { id: 'season', label: 'SEASON'},
 ]

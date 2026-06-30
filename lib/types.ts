@@ -136,7 +136,7 @@ export interface AppStore {
   rankings: SeasonRanking[]
   myRank: SeasonRanking | null
   feed: NetworkFeedItem[]
-  activeTab: 'dash' | 'nodes' | 'ranks' | 'season'
+  activeTab: 'dash' | 'nodes' | 'store' | 'ranks' | 'season'
   isLoading: boolean
   error: string | null
 

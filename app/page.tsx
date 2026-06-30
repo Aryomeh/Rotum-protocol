@@ -1,4 +1,5 @@
 'use client'
+import Store from '@/components/Store' 
 import { useEffect, useState } from 'react'
 import { useStore } from '@/store/useStore'
 import { useUser } from '@/hooks/useUser'
@@ -61,6 +62,7 @@ export default function Home() {
       <main className="flex-1 overflow-y-auto pb-4">
         {activeTab === 'dash'   && <Dashboard />}
         {activeTab === 'nodes'  && <Nodes />}
+        {activeTab === 'store' && <Store />}
         {activeTab === 'ranks'  && <Leaderboard />}
         {activeTab === 'season' && <Season />}
       </main>
