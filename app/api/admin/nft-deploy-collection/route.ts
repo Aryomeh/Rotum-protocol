@@ -28,18 +28,25 @@ export async function POST(req: NextRequest) {
     const network: 'testnet' | 'mainnet' =
       process.env.TON_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 
-    // 1. Derive W5 wallet from mnemonic
+    // 1. Derive wallet from mnemonic
     const key    = await mnemonicToWalletKey(mnemonic.split(' '))
     const wallet = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey })
 
-    // 2. Check balance before attempting deploy
+    // 2. Check balance
     const client = new TonClient({
       endpoint: network === 'mainnet'
         ? 'https://toncenter.com/api/v2/jsonRPC'
         : 'https://testnet.toncenter.com/api/v2/jsonRPC',
       apiKey: process.env.TONCENTER_API_KEY,
     })
-    const balance = await client.getBalance(wallet.address)
+
+    let balance: bigint
+    try {
+      balance = await client.getBalance(wallet.address)
+    } catch (e: any) {
+      return NextResponse.json({ success: false, step: 'getBalance', error: e.message }, { status: 500 })
+    }
+
     if (balance < 100_000_000n) {
       return NextResponse.json({
         success: false,
@@ -48,15 +55,28 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // 3. Set up SDK with Pinata storage + W5 sender
-    const api          = await createApi(network)
+    // 3. Test Pinata connectivity before doing anything on-chain
+    const storage = PinataStorage.create({ pinataApiKey, pinataSecretKey })
+    try {
+      const testUrl = await storage.uploadFile(Buffer.from('{"test":true}'))
+      console.log('Pinata OK:', testUrl)
+    } catch (e: any) {
+      return NextResponse.json({ success: false, step: 'pinata_test', error: e.message }, { status: 500 })
+    }
+
+    // 4. Set up SDK
+    let api: any
+    try {
+      api = await createApi(network)
+    } catch (e: any) {
+      return NextResponse.json({ success: false, step: 'createApi', error: e.message }, { status: 500 })
+    }
+
     const openedWallet = api.open(wallet)
     const sender       = openedWallet.sender(key.secretKey)
-    const storage      = PinataStorage.create({ pinataApiKey, pinataSecretKey })
     const sdk          = AssetsSDK.create({ api, sender, storage })
 
-    // 4. Deploy the Early Contributor NFT collection
-    //    SDK uploads collection metadata to IPFS via Pinata automatically
+    // 5. Deploy collection
     const collection = await sdk.deployNftCollection(
       {
         collectionContent: {
@@ -64,7 +84,7 @@ export async function POST(req: NextRequest) {
           description: 'Awarded to early Rotum Protocol contributors',
           image:       process.env.NFT_COVER_IMAGE_URL ?? 'https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/nft.png',
         },
-        commonContent: '', // per-item metadata uploaded at mint time
+        commonContent: '',
       },
       {
         adminAddress: wallet.address,
@@ -75,10 +95,10 @@ export async function POST(req: NextRequest) {
       success: true,
       collectionAddress: collection.address.toString({ testOnly: network !== 'mainnet' }),
       network,
-      message: 'Collection deployed. Save collectionAddress as NFT_COLLECTION_ADDRESS in Vercel env vars, then delete this route.',
+      message: 'Collection deployed. Save collectionAddress as NFT_COLLECTION_ADDRESS in Vercel, then delete this route.',
     })
   } catch (err: any) {
     console.error('NFT deploy error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Deploy failed' }, { status: 500 })
+    return NextResponse.json({ success: false, step: 'deployNftCollection', error: err.message, stack: err.stack }, { status: 500 })
   }
 }
