@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
           telegram_name:     telegramName,
           referred_by:       referredById,
           rtm_balance:       120,
+          onboarded:         false,
         })
         .select()
         .single()
