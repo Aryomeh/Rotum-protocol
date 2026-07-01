@@ -6,6 +6,8 @@ export default function NodeInstallOnboarding() {
   const { user, setFirstTime, setNodeInstallProgress, setLoading } = useStore()
   const [isInstalling, setIsInstalling] = useState(false)
   const [installComplete, setInstallComplete] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
 
   useEffect(() => {
     if (!isInstalling) return
@@ -16,26 +18,30 @@ export default function NodeInstallOnboarding() {
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime
-      const progress = Math.min((elapsed / duration) * 100, 100)
+      const currentProgress = Math.min((elapsed / duration) * 100, 100)
 
-      setNodeInstallProgress(progress)
+      setProgress(currentProgress)
 
       if (elapsed >= duration) {
         clearInterval(interval)
-        setNodeInstallProgress(100)
+        setProgress(100)
         setInstallComplete(true)
       }
     }, 50)
 
     return () => clearInterval(interval)
-  }, [isInstalling, setNodeInstallProgress])
+  }, [isInstalling])
 
   const handleInstallClick = async () => {
     try {
+      setError(null)
       setIsInstalling(true)
 
-      // Simulate downloading/installing
-      // In parallel with the 15-second animation, call the API
+      if (!user?.id) {
+        throw new Error('User ID not found')
+      }
+
+      // Call the API with user_id
       const token = sessionStorage.getItem('rtm_token')
       const response = await fetch('/api/node/install-first', {
         method: 'POST',
@@ -43,18 +49,21 @@ export default function NodeInstallOnboarding() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
+        body: JSON.stringify({ user_id: user.id }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to install first node')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to install first node')
       }
 
       // Wait for the animation to complete (15 seconds)
       // The state will update and show completion
-    } catch (error) {
-      console.error('Installation error:', error)
+    } catch (err: any) {
+      console.error('Installation error:', err)
+      setError(err.message || 'Installation failed')
       setIsInstalling(false)
-      setNodeInstallProgress(0)
+      setProgress(0)
     }
   }
 
@@ -101,7 +110,7 @@ export default function NodeInstallOnboarding() {
           <div className="progress-track mb-4">
             <div
               className="progress-fill-green"
-              style={{ width: `${useStore.getState().nodeInstallProgress}%` }}
+              style={{ width: `${progress}%` }}
             />
           </div>
         )}
@@ -110,7 +119,16 @@ export default function NodeInstallOnboarding() {
         {isInstalling && (
           <div className="text-center mb-4">
             <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>
-              {Math.round(useStore.getState().nodeInstallProgress)}% installed
+              {Math.round(progress)}% installed
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="text-center mb-4">
+            <div className="font-mono text-xs" style={{ color: 'var(--rtm-red)' }}>
+              {error}
             </div>
           </div>
         )}
@@ -149,6 +167,18 @@ export default function NodeInstallOnboarding() {
             className="btn-green w-full"
           >
             CONTINUE
+          </button>
+        )}
+
+        {error && !isInstalling && (
+          <button
+            onClick={() => {
+              setError(null)
+              setProgress(0)
+            }}
+            className="btn-rtm w-full mt-2"
+          >
+            RETRY
           </button>
         )}
       </div>

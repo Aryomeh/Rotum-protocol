@@ -37,13 +37,14 @@ export function useUser() {
         sessionStorage.setItem('rtm_token', sessionToken)
 
         // 3. Check if first-time user (not onboarded)
-        if (!user.onboarded) {
+        // Only show onboarding if they're NEW and not onboarded
+        if (isNew && !user.onboarded) {
           setFirstTime(true)
           setLoading(false)
           return // Exit early, don't load dashboard data
         }
 
-        // 4. Load everything in parallel (only for existing users)
+        // 4. Load everything in parallel (only for existing/onboarded users)
         const [seasonRes, upgradesRes, nodesRes, rankingsRes] = await Promise.all([
           supabase
             .from('seasons')
