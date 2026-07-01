@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { WalletContractV4, TonClient } from '@ton/ton'
 import { mnemonicToWalletKey } from '@ton/crypto'
 import { AssetsSDK, PinataStorage } from '@ton-community/assets-sdk'
-import { Address, toNano } from '@ton/core'
+import { Address, toNano, beginCell } from '@ton/core'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
@@ -85,20 +85,34 @@ export async function POST(req: NextRequest) {
     // 6. Get next item index — correct method is getData(), not getCollectionData()
     const { nextItemIndex } = await collection.getData()
 
-    // 7. Mint — correct shape: { index, owner, individualContent, value? }
+    // 7. Build individualContent as a properly-prefixed off-chain content cell.
+    //    @ton-community/assets-sdk@0.0.5's sendMint will use storeStringTail()
+    //    with NO leading type byte if you pass a plain string here, which
+    //    produces a cell wallets/indexers can't parse as valid TEP-64 content
+    //    (they'll silently fall back to showing the collection's own metadata
+    //    for every item). Building the cell ourselves with the 0x01 off-chain
+    //    prefix avoids that bug entirely.
+    const OFF_CHAIN_CONTENT_PREFIX = 0x01
+    const individualContentCell = beginCell()
+      .storeUint(OFF_CHAIN_CONTENT_PREFIX, 8)
+      .storeStringTail(
+        `https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/items/${nextItemIndex}.json`
+      )
+      .endCell()
+
+    // 8. Mint — pass the Cell, not a raw string, for individualContent
     await collection.sendMint(
       sender,
       {
         index: nextItemIndex,
         owner: Address.parse(walletAddress),
-        individualContent:
-          `https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/items/${nextItemIndex}.json`,
+        individualContent: individualContentCell,
         value: toNano('0.05'),
       },
       { value: toNano('0.07') }
     )
 
-    // 8. Apply rewards + mark as minted in Supabase
+    // 9. Apply rewards + mark as minted in Supabase
     const { data: userData } = await db
       .from('users')
       .select('rtm_balance, hash_power')
