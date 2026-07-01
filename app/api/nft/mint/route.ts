@@ -89,13 +89,13 @@ export async function POST(req: NextRequest) {
     await collection.sendMint(
       sender,
       {
-        index:             nextItemIndex,
-        owner:             Address.parse(walletAddress),
-        individualContent: process.env.NFT_COVER_IMAGE_URL
-          ?? 'https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/nft.png',
-        value:             toNano('0.05'),
+        index: nextItemIndex,
+        owner: Address.parse(walletAddress),
+        individualContent:
+          `https://aavynuxipocthqwpnzrd.supabase.co/storage/v1/object/public/nft-assets/items/${nextItemIndex}.json`,
+        value: toNano('0.05'),
       },
-      { value: toNano('0.07') } // total tx value (covers mint + forwarding)
+      { value: toNano('0.07') }
     )
 
     // 8. Apply rewards + mark as minted in Supabase
