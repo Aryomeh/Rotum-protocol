@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 export function useUser() {
   const { setUser, setSeason, setUpgrades, setUserNodes,
-          setRankings, setMyRank, setLoading, setError } = useStore()
+          setRankings, setMyRank, setLoading, setError, setFirstTime } = useStore()
   const bootstrapped = useRef(false)
 
   useEffect(() => {
@@ -30,13 +30,20 @@ export function useUser() {
         })
 
         if (!authRes.ok) throw new Error('Auth failed')
-        const { user, sessionToken } = await authRes.json()
+        const { user, isNew, sessionToken } = await authRes.json()
         setUser(user)
 
         // Store session token for subsequent requests
         sessionStorage.setItem('rtm_token', sessionToken)
 
-        // 3. Load everything in parallel
+        // 3. Check if first-time user (not onboarded)
+        if (!user.onboarded) {
+          setFirstTime(true)
+          setLoading(false)
+          return // Exit early, don't load dashboard data
+        }
+
+        // 4. Load everything in parallel (only for existing users)
         const [seasonRes, upgradesRes, nodesRes, rankingsRes] = await Promise.all([
           supabase
             .from('seasons')

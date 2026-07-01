@@ -20,7 +20,7 @@ export interface User {
   last_active_at: string
   joined_at: string
   is_banned: boolean
-  
+  onboarded: boolean
 }
 
 export interface Season {
@@ -144,6 +144,8 @@ export interface AppStore {
   activeTab: 'dash' | 'nodes' | 'store' | 'ranks' | 'season'
   isLoading: boolean
   error: string | null
+  isFirstTime: boolean
+  nodeInstallProgress: number
 
   setUser: (u: User) => void
   setSeason: (s: Season) => void
@@ -155,4 +157,6 @@ export interface AppStore {
   setActiveTab: (tab: AppStore['activeTab']) => void
   setLoading: (v: boolean) => void
   setError: (e: string | null) => void
+  setFirstTime: (v: boolean) => void
+  setNodeInstallProgress: (progress: number) => void
 }

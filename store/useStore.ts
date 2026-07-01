@@ -12,6 +12,8 @@ export const useStore = create<AppStore>((set) => ({
   activeTab:  'dash',
   isLoading:  true,
   error:      null,
+  isFirstTime: false,
+  nodeInstallProgress: 0,
 
   setUser:      (user)    => set({ user }),
   setSeason:    (season)  => set({ season }),
@@ -28,4 +30,6 @@ export const useStore = create<AppStore>((set) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setLoading:   (isLoading) => set({ isLoading }),
   setError:     (error)     => set({ error }),
+  setFirstTime: (isFirstTime) => set({ isFirstTime }),
+  setNodeInstallProgress: (progress) => set({ nodeInstallProgress: progress }),
 }))

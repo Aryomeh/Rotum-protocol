@@ -10,12 +10,13 @@ import Nodes from '@/components/Nodes'
 import Leaderboard from '@/components/Leaderboard'
 import Season from '@/components/Season'
 import Profile from '@/components/Profile'
+import NodeInstallOnboarding from '@/components/NodeInstallOnboarding'
 
 export default function Home() {
   useUser()
   useRealtime()
 
-  const { activeTab, isLoading, error } = useStore()
+  const { activeTab, isLoading, error, isFirstTime } = useStore()
   const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
@@ -27,6 +28,11 @@ export default function Home() {
       twa.setBackgroundColor('#080a0f')
     }
   }, [])
+
+  // Show onboarding for first-time users (before loading state ends)
+  if (isFirstTime) {
+    return <NodeInstallOnboarding />
+  }
 
   if (isLoading) {
     return (
