@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 1. Mark user as onboarded
+    // 1. Mark user as onboarded (the "install" itself is just a UI animation — no real node is created)
     const { error: updateError } = await supabase
       .from('users')
       .update({ onboarded: true })
@@ -43,45 +43,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 2. Create first default node (e.g., basic hardware node)
-    const { data: upgradeRows, error: upgradeError } = await supabase
-      .from('upgrade_catalogue')
-      .select('slug')
-      .eq('category', 'hardware')
-      .order('sort_order')
-      .limit(1)
-
-    const upgradeData = upgradeRows?.[0]
-
-    if (upgradeError || !upgradeData) {
-      console.error('Error fetching default upgrade:', upgradeError)
-      return NextResponse.json(
-        { error: 'Failed to find default node type' },
-        { status: 500 }
-      )
-    }
-
-    const { error: nodeError } = await supabase
-      .from('user_nodes')
-      .insert({
-        user_id: userId,
-        upgrade_slug: upgradeData.slug,
-        level: 1,
-        installed_at: new Date().toISOString(),
-      })
-
-    if (nodeError) {
-      console.error('Error creating first node:', nodeError)
-      return NextResponse.json(
-        { error: 'Failed to create first node' },
-        { status: 500 }
-      )
-    }
-
-    // 3. Return success
+    // 2. Return success
     return NextResponse.json({
       success: true,
-      message: 'First node installed and user onboarded',
+      message: 'User onboarded',
     })
   } catch (error) {
     console.error('Unexpected error:', error)
