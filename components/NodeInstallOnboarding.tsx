@@ -3,13 +3,13 @@ import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 
 export default function NodeInstallOnboarding() {
-  const { user, setFirstTime, setNodeInstallProgress, setLoading } = useStore()[cite: 2]
-  const [isInstalling, setIsInstalling] = useState(false)[cite: 2]
-  const [installComplete, setInstallComplete] = useState(false)[cite: 2]
-  const [error, setError] = useState<string | null>(null)[cite: 2]
-  const [progress, setProgress] = useState(0)[cite: 2]
+  const { user, setFirstTime, setNodeInstallProgress, setLoading } = useStore()
+  const [isInstalling, setIsInstalling] = useState(false)
+  const [installComplete, setInstallComplete] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
 
-  const DURATION = 15000 // 15 seconds[cite: 2]
+  const DURATION = 15000 // 15 seconds
 
   // Safe helper to grab the Telegram WebApp object
   const getTelegramWebApp = () => {
@@ -21,7 +21,7 @@ export default function NodeInstallOnboarding() {
 
   // 1. Recover background state on mount
   useEffect(() => {
-    if (!user?.id) return[cite: 2]
+    if (!user?.id) return
 
     const tg = getTelegramWebApp()
 
@@ -54,9 +54,9 @@ export default function NodeInstallOnboarding() {
 
   // 2. Persistent Progress Loop
   useEffect(() => {
-    if (!isInstalling || !user?.id) return[cite: 2]
+    if (!isInstalling || !user?.id) return
 
-    let interval: NodeJS.Timeout[cite: 2]
+    let interval: NodeJS.Timeout
     const tg = getTelegramWebApp()
 
     const startLoop = (savedStartTime: string) => {
@@ -66,26 +66,26 @@ export default function NodeInstallOnboarding() {
       const updateProgress = () => {
         const now = Date.now()
         const elapsed = now - startTime
-        const currentProgress = Math.min((elapsed / DURATION) * 100, 100)[cite: 2]
+        const currentProgress = Math.min((elapsed / DURATION) * 100, 100)
 
         if (now >= targetEndTime) {
-          setProgress(100)[cite: 2]
-          setInstallComplete(true)[cite: 2]
-          setIsInstalling(false)[cite: 2]
+          setProgress(100)
+          setInstallComplete(true)
+          setIsInstalling(false)
           
           if (tg?.CloudStorage) {
             tg.CloudStorage.removeItem(`node_install_start_${user.id}`)
           } else {
             localStorage.removeItem(`node_install_start_${user.id}`)
           }
-          clearInterval(interval)[cite: 2]
+          clearInterval(interval)
         } else {
-          setProgress(currentProgress)[cite: 2]
+          setProgress(currentProgress)
         }
       }
 
       updateProgress()
-      interval = setInterval(updateProgress, 50)[cite: 2]
+      interval = setInterval(updateProgress, 50)
     }
 
     if (tg?.CloudStorage) {
@@ -98,16 +98,16 @@ export default function NodeInstallOnboarding() {
     }
 
     return () => {
-      if (interval) clearInterval(interval)[cite: 2]
+      if (interval) clearInterval(interval)
     }
   }, [isInstalling, user?.id])
 
   const handleInstallClick = async () => {
     try {
-      setError(null)[cite: 2]
+      setError(null)
 
       if (!user?.id) {
-        throw new Error('User ID not found')[cite: 2]
+        throw new Error('User ID not found')
       }
 
       // 1. Track timestamp immediately so it persists if they close the app right after paying
@@ -120,28 +120,28 @@ export default function NodeInstallOnboarding() {
         localStorage.setItem(`node_install_start_${user.id}`, nowStr)
       }
 
-      setIsInstalling(true)[cite: 2]
+      setIsInstalling(true)
 
       // 2. Fire and forget the simulation API call
-      const token = sessionStorage.getItem('rtm_token')[cite: 2]
-      const response = await fetch('/api/node/install-first', {[cite: 2]
-        method: 'POST',[cite: 2]
-        headers: {[cite: 2]
-          'Content-Type': 'application/json',[cite: 2]
-          'Authorization': `Bearer ${token}`,[cite: 2]
-        },[cite: 2]
-        body: JSON.stringify({ user_id: user.id }),[cite: 2]
-      })[cite: 2]
+      const token = sessionStorage.getItem('rtm_token')
+      const response = await fetch('/api/node/install-first', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))[cite: 2]
-        throw new Error(errorData.error || 'Failed to install first node')[cite: 2]
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to install first node')
       }
     } catch (err: any) {
-      console.error('Installation error:', err)[cite: 2]
-      setError(err.message || 'Installation failed')[cite: 2]
-      setIsInstalling(false)[cite: 2]
-      setProgress(0)[cite: 2]
+      console.error('Installation error:', err)
+      setError(err.message || 'Installation failed')
+      setIsInstalling(false)
+      setProgress(0)
 
       const tg = getTelegramWebApp()
       if (user?.id) {
@@ -152,125 +152,125 @@ export default function NodeInstallOnboarding() {
   }
 
   const handleContinue = () => {
-    setFirstTime(false)[cite: 2]
-    setLoading(true)[cite: 2]
-    window.location.reload()[cite: 2]
+    setFirstTime(false)
+    setLoading(true)
+    window.location.reload()
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-6 px-6" style={{ background: 'var(--rtm-bg)' }}>[cite: 2]
+    <div className="flex flex-col items-center justify-center min-h-screen gap-6 px-6" style={{ background: 'var(--rtm-bg)' }}>
       {/* Header */}
-      <div className="text-center">[cite: 2]
-        <div className="font-mono text-sm tracking-widest mb-2" style={{ color: 'var(--rtm-purple)' }}>[cite: 2]
+      <div className="text-center">
+        <div className="font-mono text-sm tracking-widest mb-2" style={{ color: 'var(--rtm-purple)' }}>
           ROTUM PROTOCOL
-        </div>[cite: 2]
-        <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>[cite: 2]
+        </div>
+        <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>
           Welcome to the network
-        </div>[cite: 2]
-      </div>[cite: 2]
+        </div>
+      </div>
 
       {/* Project Description */}
-      <div className="max-w-sm text-center">[cite: 2]
-        <p className="font-mono text-xs leading-relaxed" style={{ color: 'var(--rtm-text)' }}>[cite: 2]
-          Rotum Protocol is a distributed computing network. Your first node will begin contributing computing power to the network immediately upon installation.[cite: 2]
-        </p>[cite: 2]
-      </div>[cite: 2]
+      <div className="max-w-sm text-center">
+        <p className="font-mono text-xs leading-relaxed" style={{ color: 'var(--rtm-text)' }}>
+          Rotum Protocol is a distributed computing network. Your first node will begin contributing computing power to the network immediately upon installation.
+        </p>
+      </div>
 
       {/* Node Installation Card */}
-      <div className="rtm-card rtm-card-purple w-full max-w-sm p-6 relative">[cite: 2]
-        <div className="text-center mb-6">[cite: 2]
-          <div className="font-mono text-xs tracking-wider mb-4" style={{ color: 'var(--rtm-muted)' }}>[cite: 2]
+      <div className="rtm-card rtm-card-purple w-full max-w-sm p-6 relative">
+        <div className="text-center mb-6">
+          <div className="font-mono text-xs tracking-wider mb-4" style={{ color: 'var(--rtm-muted)' }}>
             FIRST NODE
-          </div>[cite: 2]
-          <div className="font-mono text-2xl font-bold" style={{ color: 'var(--rtm-green)' }}>[cite: 2]
-            {installComplete ? '✓ READY' : isInstalling ? 'INSTALLING...' : 'READY TO INSTALL'}[cite: 2]
-          </div>[cite: 2]
-        </div>[cite: 2]
+          </div>
+          <div className="font-mono text-2xl font-bold" style={{ color: 'var(--rtm-green)' }}>
+            {installComplete ? '✓ READY' : isInstalling ? 'INSTALLING...' : 'READY TO INSTALL'}
+          </div>
+        </div>
 
         {/* Progress Bar */}
-        {(isInstalling || installComplete) && ([cite: 2]
-          <div className="progress-track mb-4">[cite: 2]
+        {(isInstalling || installComplete) && (
+          <div className="progress-track mb-4">
             <div
-              className="progress-fill-green"[cite: 2]
-              style={{ width: `${progress}%` }}[cite: 2]
-            />[cite: 2]
-          </div>[cite: 2]
+              className="progress-fill-green"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         )}
 
         {/* Status Text */}
-        {isInstalling && ([cite: 2]
-          <div className="text-center mb-4">[cite: 2]
-            <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>[cite: 2]
-              {Math.round(progress)}% installed[cite: 2]
-            </div>[cite: 2]
-          </div>[cite: 2]
+        {isInstalling && (
+          <div className="text-center mb-4">
+            <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>
+              {Math.round(progress)}% installed
+            </div>
+          </div>
         )}
 
         {/* Error Message */}
-        {error && ([cite: 2]
-          <div className="text-center mb-4">[cite: 2]
-            <div className="font-mono text-xs" style={{ color: 'var(--rtm-red)' }}>[cite: 2]
-              {error}[cite: 2]
-            </div>[cite: 2]
-          </div>[cite: 2]
+        {error && (
+          <div className="text-center mb-4">
+            <div className="font-mono text-xs" style={{ color: 'var(--rtm-red)' }}>
+              {error}
+            </div>
+          </div>
         )}
 
         {/* Installation Info */}
-        {!isInstalling && !installComplete && ([cite: 2]
-          <div className="text-center mb-6">[cite: 2]
-            <div className="font-mono text-xs leading-relaxed" style={{ color: 'var(--rtm-muted)' }}>[cite: 2]
-              Click below to install your first node. This will take about 15 seconds.[cite: 2]
-            </div>[cite: 2]
-          </div>[cite: 2]
+        {!isInstalling && !installComplete && (
+          <div className="text-center mb-6">
+            <div className="font-mono text-xs leading-relaxed" style={{ color: 'var(--rtm-muted)' }}>
+              Click below to install your first node. This will take about 15 seconds.
+            </div>
+          </div>
         )}
 
-        {installComplete && ([cite: 2]
-          <div className="text-center mb-6">[cite: 2]
-            <div className="font-mono text-xs leading-relaxed" style={{ color: 'var(--rtm-green)' }}>[cite: 2]
-              Your node is installed and running! Let's get started.[cite: 2]
-            </div>[cite: 2]
-          </div>[cite: 2]
+        {installComplete && (
+          <div className="text-center mb-6">
+            <div className="font-mono text-xs leading-relaxed" style={{ color: 'var(--rtm-green)' }}>
+              Your node is installed and running! Let's get started.
+            </div>
+          </div>
         )}
 
         {/* Action Button */}
-        {!isInstalling && !installComplete && ([cite: 2]
+        {!isInstalling && !installComplete && (
           <button
-            onClick={handleInstallClick}[cite: 2]
-            className="btn-green w-full"[cite: 2]
-            disabled={isInstalling}[cite: 2]
-          >[cite: 2]
-            INSTALL FIRST NODE[cite: 2]
-          </button>[cite: 2]
+            onClick={handleInstallClick}
+            className="btn-green w-full"
+            disabled={isInstalling}
+          >
+            INSTALL FIRST NODE
+          </button>
         )}
 
-        {installComplete && ([cite: 2]
+        {installComplete && (
           <button
-            onClick={handleContinue}[cite: 2]
-            className="btn-green w-full"[cite: 2]
-          >[cite: 2]
-            CONTINUE[cite: 2]
-          </button>[cite: 2]
+            onClick={handleContinue}
+            className="btn-green w-full"
+          >
+            CONTINUE
+          </button>
         )}
 
-        {error && !isInstalling && ([cite: 2]
+        {error && !isInstalling && (
           <button
             onClick={() => {
-              setError(null)[cite: 2]
-              setProgress(0)[cite: 2]
-            }}[cite: 2]
-            className="btn-rtm w-full mt-2"[cite: 2]
-          >[cite: 2]
-            RETRY[cite: 2]
-          </button>[cite: 2]
+              setError(null)
+              setProgress(0)
+            }}
+            className="btn-rtm w-full mt-2"
+          >
+            RETRY
+          </button>
         )}
-      </div>[cite: 2]
+      </div>
 
       {/* Footer */}
-      <div className="max-w-sm text-center">[cite: 2]
-        <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>[cite: 2]
-          You can install additional nodes later from the Nodes section.[cite: 2]
-        </div>[cite: 2]
-      </div>[cite: 2]
-    </div>[cite: 2]
+      <div className="max-w-sm text-center">
+        <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>
+          You can install additional nodes later from the Nodes section.
+        </div>
+      </div>
+    </div>
   )
 }
