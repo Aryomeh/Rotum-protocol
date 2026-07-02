@@ -48,6 +48,8 @@ export default function AdminSeason() {
   const [name, setName]         = useState('')
   const [status, setStatus]     = useState('active')
   const [endsAt, setEndsAt]     = useState('')
+  const [poolCurrent, setPoolCurrent] = useState('0')
+  const [poolSize, setPoolSize] = useState('100000')
   const [top10, setTop10]       = useState('40')
   const [top100, setTop100]     = useState('30')
   const [top1000, setTop1000]   = useState('20')
@@ -69,6 +71,8 @@ export default function AdminSeason() {
       setName(data.name)
       setStatus(data.status)
       setEndsAt(data.ends_at?.split('T')[0] ?? '')
+      setPoolCurrent(data.pool_current?.toString() ?? '0')
+      setPoolSize(data.pool_size?.toString() ?? '100000')
     }
     setLoading(false)
   }
@@ -87,6 +91,8 @@ export default function AdminSeason() {
         name,
         status,
         ends_at: new Date(endsAt).toISOString(),
+        pool_current: parseFloat(poolCurrent) || 0,
+        pool_size: parseFloat(poolSize) || 100000,
       })
       .eq('id', season.id)
 
@@ -130,6 +136,7 @@ export default function AdminSeason() {
 
   const totalPct = parseInt(top10) + parseInt(top100) + parseInt(top1000) + parseInt(random)
   const pctOk    = totalPct === 100
+  const currentPoolNum = parseFloat(poolCurrent) || 0
 
   if (loading) return (
     <div style={{ fontFamily: "'Share Tech Mono'", color: '#4a5a70', fontSize: 11 }}>
@@ -178,6 +185,30 @@ export default function AdminSeason() {
               <input style={inp} type="date" value={endsAt} onChange={e => setEndsAt(e.target.value)} />
             </div>
 
+            {/* Pool controls */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={lbl}>CURRENT POOL ($RTM)</label>
+              <input 
+                style={inp} 
+                type="number" 
+                min="0" 
+                value={poolCurrent} 
+                onChange={e => setPoolCurrent(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={lbl}>TARGET POOL SIZE ($RTM)</label>
+              <input 
+                style={inp} 
+                type="number" 
+                min="0" 
+                value={poolSize} 
+                onChange={e => setPoolSize(e.target.value)}
+                placeholder="100000"
+              />
+            </div>
+
             {/* Pool info */}
             <div style={{
               background: '#080a0f', border: '1px solid #1a2230',
@@ -185,10 +216,10 @@ export default function AdminSeason() {
             }}>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', marginBottom: 6 }}>POOL INFO</div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div>Target: <span style={{ color: '#f0a500' }}>{(season?.pool_size ?? 0).toLocaleString()} $RTM</span></div>
-                <div>Current: <span style={{ color: '#00e5a0' }}>{Math.floor(season?.pool_current ?? 0).toLocaleString()} $RTM</span></div>
+                <div>Target: <span style={{ color: '#f0a500' }}>{(parseFloat(poolSize) || 0).toLocaleString()} $RTM</span></div>
+                <div>Current: <span style={{ color: '#00e5a0' }}>{Math.floor(currentPoolNum).toLocaleString()} $RTM</span></div>
                 <div>Filled: <span style={{ color: '#9d7fd4' }}>
-                  {season ? ((season.pool_current / season.pool_size) * 100).toFixed(1) : 0}%
+                  {parseFloat(poolSize) ? ((currentPoolNum / parseFloat(poolSize)) * 100).toFixed(1) : 0}%
                 </span></div>
               </div>
             </div>
@@ -253,7 +284,7 @@ export default function AdminSeason() {
                 { tier: 'TOP 100',  pct: parseInt(top100),  count: 90  },
                 { tier: 'TOP 1K',   pct: parseInt(top1000), count: 900 },
               ].map(row => {
-                const poolAmt = (season?.pool_current ?? 0) * (row.pct / 100)
+                const poolAmt = currentPoolNum * (row.pct / 100)
                 const perUser = poolAmt / row.count
                 return (
                   <div key={row.tier} style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: '#c0cce0', marginBottom: 4 }}>
