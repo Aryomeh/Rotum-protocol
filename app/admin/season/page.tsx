@@ -1,321 +1,318 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-interface Season {
-  id:          number
-  name:        string
-  status:      string
-  pool_size:   number
-  pool_current: number
-  starts_at:   string
-  ends_at:     string
+// ==========================================
+// TYPES & INTERFACES
+// ==========================================
+
+interface Stats {
+  totalUsers: number
+  activeToday: number
+  seasonPool: number
+  totalPurchases: number
+  seasonName: string
+  seasonDaysLeft: number
+  networkHash: string
 }
 
-const inp: React.CSSProperties = {
-  width: '100%', background: '#080a0f', border: '1px solid #1a2230',
-  color: '#c0cce0', fontFamily: "'Share Tech Mono'", fontSize: 12,
-  padding: '7px 10px', borderRadius: 3, outline: 'none',
+interface FeedItem {
+  id: number
+  message: string
+  color: string
+  created_at: string
 }
-const lbl: React.CSSProperties = {
-  display: 'block', fontFamily: "'Share Tech Mono'", fontSize: 10,
-  color: '#4a5a70', letterSpacing: '1px', marginBottom: 5,
+
+interface PurchaseItem {
+  price_stars: number | null
 }
-const panel: React.CSSProperties = {
-  background: '#111520', border: '1px solid #1a2230',
-  borderRadius: 6, overflow: 'hidden', marginBottom: 12,
+
+// ==========================================
+// STYLES & CONFIG
+// ==========================================
+
+const COLOR_MAP: Record<string, string> = {
+  accent: '#9d7fd4',
+  green: '#00e5a0',
+  amber: '#f0a500',
 }
-const panelHead: React.CSSProperties = {
-  padding: '10px 14px', borderBottom: '1px solid #1a2230',
-  fontFamily: "'Share Tech Mono'", fontSize: 10,
-  color: '#4a5a70', letterSpacing: '2px',
+
+const S = {
+  pageTitle: { 
+    fontFamily: "'Share Tech Mono'", 
+    fontSize: 11, 
+    color: '#4a5a70', 
+    letterSpacing: '3px', 
+    marginBottom: 16, 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: 8 
+  } as React.CSSProperties,
+  statRow: { 
+    display: 'grid', 
+    gridTemplateColumns: 'repeat(4,1fr)', 
+    gap: 10, 
+    marginBottom: 16 
+  } as React.CSSProperties,
+  card: { 
+    background: '#111520', 
+    border: '1px solid #1a2230', 
+    borderRadius: 6, 
+    padding: '12px 14px' 
+  } as React.CSSProperties,
+  label: { 
+    fontFamily: "'Share Tech Mono'", 
+    fontSize: 9, 
+    color: '#4a5a70', 
+    letterSpacing: '1px', 
+    marginBottom: 6 
+  } as React.CSSProperties,
+  val: { 
+    fontFamily: "'Share Tech Mono'", 
+    fontSize: 22, 
+    fontWeight: 700, 
+    lineHeight: 1 
+  } as React.CSSProperties,
+  sub: { 
+    fontFamily: "'Share Tech Mono'", 
+    fontSize: 9, 
+    color: '#4a5a70', 
+    marginTop: 4 
+  } as React.CSSProperties,
+  panelContainer: { 
+    display: 'grid', 
+    gridTemplateColumns: '1fr 1fr', 
+    gap: 12 
+  } as React.CSSProperties,
+  panel: { 
+    background: '#111520', 
+    border: '1px solid #1a2230', 
+    borderRadius: 6, 
+    overflow: 'hidden', 
+    marginBottom: 12 
+  } as React.CSSProperties,
+  panelHead: { 
+    padding: '10px 14px', 
+    borderBottom: '1px solid #1a2230', 
+    fontFamily: "'Share Tech Mono'", 
+    fontSize: 10, 
+    color: '#4a5a70', 
+    letterSpacing: '2px' 
+  } as React.CSSProperties,
+  panelBody: { 
+    padding: 14 
+  } as React.CSSProperties,
+  panelSubtext: { 
+    color: '#4a5a70', 
+    fontSize: 9, 
+    marginTop: 2 
+  } as React.CSSProperties,
+  feedItem: { 
+    padding: '7px 0', 
+    borderBottom: '1px solid #1a2230', 
+    fontFamily: "'Share Tech Mono'", 
+    fontSize: 11, 
+    display: 'flex', 
+    alignItems: 'flex-start', 
+    gap: 8 
+  } as React.CSSProperties,
+  feedMessage: { 
+    flex: 1, 
+    color: '#c0cce0' 
+  } as React.CSSProperties,
+  emptyFeed: { 
+    color: '#4a5a70', 
+    fontSize: 10, 
+    fontFamily: "'Share Tech Mono'" 
+  } as React.CSSProperties,
+  loading: { 
+    fontFamily: "'Share Tech Mono'", 
+    color: '#4a5a70', 
+    fontSize: 11, 
+    padding: 20 
+  } as React.CSSProperties,
+  dot: (color: string) => ({ 
+    width: 5, 
+    height: 5, 
+    borderRadius: '50%', 
+    background: color, 
+    flexShrink: 0, 
+    marginTop: 3 
+  }) as React.CSSProperties,
 }
-const panelBody: React.CSSProperties = { padding: 14 }
-const btn = (color: string, bg: string, border: string): React.CSSProperties => ({
-  width: '100%', background: bg, border: `1px solid ${border}`,
-  color, fontFamily: "'Share Tech Mono'", fontSize: 11,
-  padding: '8px 0', borderRadius: 3, cursor: 'pointer',
-  letterSpacing: '1px', marginTop: 8,
-})
 
-export default function AdminSeason() {
-  const [season, setSeason]     = useState<Season | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(false)
-  const [toast, setToast]       = useState('')
+// ==========================================
+// MAIN COMPONENT
+// ==========================================
 
-  // Form state
-  const [name, setName]         = useState('')
-  const [status, setStatus]     = useState('active')
-  const [endsAt, setEndsAt]     = useState('')
-  const [poolCurrent, setPoolCurrent] = useState('0')
-  const [poolSize, setPoolSize] = useState('100000')
-  const [top10, setTop10]       = useState('40')
-  const [top100, setTop100]     = useState('30')
-  const [top1000, setTop1000]   = useState('20')
-  const [random, setRandom]     = useState('10')
+export default function AdminDashboard() {
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [feed, setFeed] = useState<FeedItem[]>([])
+  const [loading, setLoad] = useState(true)
 
-  useEffect(() => { loadSeason() }, [])
+  useEffect(() => {
+    loadStats()
+    loadFeed()
 
-  async function loadSeason() {
-    setLoading(true)
-    const { data } = await supabase
-      .from('seasons')
-      .select('*')
-      .order('id', { ascending: false })
-      .limit(1)
-      .single()
+    // Realtime pool updates
+    const sub = supabase
+      .channel('admin-seasons')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'seasons' }, () => loadStats())
+      .subscribe()
 
-    if (data) {
-      setSeason(data)
-      setName(data.name)
-      setStatus(data.status)
-      setEndsAt(data.ends_at?.split('T')[0] ?? '')
-      setPoolCurrent(data.pool_current?.toString() ?? '0')
-      setPoolSize(data.pool_size?.toString() ?? '100000')
+    return () => {
+      supabase.removeChannel(sub)
     }
-    setLoading(false)
-  }
+  }, [])
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 2800)
-  }
+  async function loadStats() {
+    try {
+      const [seasonRes, usersRes, activeRes, purchasesRes] = await Promise.all([
+        supabase.from('seasons').select('*').eq('status', 'active').single(),
+        supabase.from('users').select('id', { count: 'exact', head: true }),
+        supabase.from('users').select('id', { count: 'exact', head: true })
+          .gte('last_active_at', new Date(Date.now() - 86_400_000).toISOString()),
+        supabase.from('purchases').select('price_stars', { count: 'exact' }).eq('status', 'completed'),
+      ])
 
-  async function saveSeason() {
-    if (!season) return
-    setSaving(true)
-    const { error } = await supabase
-      .from('seasons')
-      .update({
-        name,
-        status,
-        ends_at: new Date(endsAt).toISOString(),
-        pool_current: parseFloat(poolCurrent) || 0,
-        pool_size: parseFloat(poolSize) || 100000,
+      const season = seasonRes.data
+      const endsAt = season ? new Date(season.ends_at) : null
+      const daysLeft = endsAt ? Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86_400_000)) : 0
+      const totalStars = purchasesRes.data?.reduce((s: number, p: PurchaseItem) => s + (p.price_stars ?? 0), 0) ?? 0
+
+      setStats({
+        totalUsers: usersRes.count ?? 0,
+        activeToday: activeRes.count ?? 0,
+        seasonPool: season?.pool_current ?? 0,
+        totalPurchases: totalStars,
+        seasonName: season?.name ?? '—',
+        seasonDaysLeft: daysLeft,
+        networkHash: '142.8 PH/s',
       })
-      .eq('id', season.id)
-
-    if (error) showToast('❌ Error: ' + error.message)
-    else { showToast('✓ Season saved'); loadSeason() }
-    setSaving(false)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoad(false)
+    }
   }
 
-  async function endSeason() {
-    if (!season) return
-    if (!confirm('End season early and queue reward distribution?')) return
-    setSaving(true)
-    const { error } = await supabase
-      .from('seasons')
-      .update({ status: 'ended', ends_at: new Date().toISOString() })
-      .eq('id', season.id)
-
-    if (error) showToast('❌ Error: ' + error.message)
-    else showToast('✓ Season ended — go to Rewards to distribute')
-    setSaving(false)
-    loadSeason()
+  async function loadFeed() {
+    const { data } = await supabase
+      .from('network_feed')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(8)
+    if (data) setFeed(data)
   }
 
-  async function createNewSeason() {
-    if (!confirm('Create a new season? Current season must be ended first.')) return
-    setSaving(true)
-    const startDate = new Date()
-    const endDate   = new Date(startDate.getTime() + 30 * 86_400_000)
-    const { error } = await supabase.from('seasons').insert({
-      name:        'Season ' + ((season?.id ?? 0) + 1),
-      status:      'upcoming',
-      pool_size:   100000,
-      pool_current: 0,
-      starts_at:   startDate.toISOString(),
-      ends_at:     endDate.toISOString(),
-    })
-    if (error) showToast('❌ Error: ' + error.message)
-    else { showToast('✓ New season created'); loadSeason() }
-    setSaving(false)
+  if (loading) {
+    return (
+      <div style={S.loading}>
+        LOADING STATS...
+      </div>
+    )
   }
-
-  const totalPct = parseInt(top10) + parseInt(top100) + parseInt(top1000) + parseInt(random)
-  const pctOk    = totalPct === 100
-  const currentPoolNum = parseFloat(poolCurrent) || 0
-
-  if (loading) return (
-    <div style={{ fontFamily: "'Share Tech Mono'", color: '#4a5a70', fontSize: 11 }}>
-      LOADING...
-    </div>
-  )
 
   return (
     <div>
-      <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, color: '#4a5a70', letterSpacing: '3px', marginBottom: 16 }}>
-        🏆 SEASON MANAGEMENT
+      <div style={S.pageTitle}>📊 OVERVIEW</div>
+
+      {/* Stat cards */}
+      <div style={S.statRow}>
+        <div style={{ ...S.card, borderTop: '2px solid #9d7fd4' }}>
+          <div style={S.label}>TOTAL OPERATORS</div>
+          <div style={{ ...S.val, color: '#9d7fd4' }}>
+            {(stats?.totalUsers ?? 0).toLocaleString()}
+          </div>
+          <div style={S.sub}>all time</div>
+        </div>
+
+        <div style={{ ...S.card, borderTop: '2px solid #00e5a0' }}>
+          <div style={S.label}>SEASON POOL</div>
+          <div style={{ ...S.val, color: '#00e5a0' }}>
+            {Math.floor(stats?.seasonPool ?? 0).toLocaleString()} $RTM
+          </div>
+          <div style={S.sub}>{stats?.seasonName}</div>
+        </div>
+
+        <div style={{ ...S.card, borderTop: '2px solid #f0a500' }}>
+          <div style={S.label}>ACTIVE TODAY</div>
+          <div style={{ ...S.val, color: '#f0a500' }}>
+            {(stats?.activeToday ?? 0).toLocaleString()}
+          </div>
+          <div style={S.sub}>last 24 hours</div>
+        </div>
+
+        <div style={{ ...S.card, borderTop: '2px solid #00ccdd' }}>
+          <div style={S.label}>STARS COLLECTED</div>
+          <div style={{ ...S.val, color: '#00ccdd' }}>
+            ⭐ {(stats?.totalPurchases ?? 0).toLocaleString()}
+          </div>
+          <div style={S.sub}>total purchases</div>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      {/* Two panels */}
+      <div style={S.panelContainer}>
+        {/* Season status */}
+        <div style={S.panel}>
+          <div style={S.panelHead}>SEASON STATUS</div>
+          <div style={S.panelBody}>
+            <div style={S.feedItem}>
+              <span style={S.dot('#00e5a0')} />
+              <div>
+                <div>{stats?.seasonName ?? '—'}</div>
+                <div style={S.panelSubtext}>
+                  Active · {stats?.seasonDaysLeft} days remaining
+                </div>
+              </div>
+            </div>
 
-        {/* Current season */}
-        <div style={panel}>
-          <div style={panelHead}>
-            CURRENT SEASON
-            {season && (
-              <span style={{
-                marginLeft: 8, background: season.status === 'active' ? '#0a2a14' : '#1a0810',
-                border: `1px solid ${season.status === 'active' ? '#1a4a25' : '#3a1020'}`,
-                color: season.status === 'active' ? '#00e5a0' : '#ff4455',
-                fontSize: 9, padding: '1px 7px', borderRadius: 2,
-              }}>
-                {season.status.toUpperCase()}
-              </span>
+            <div style={S.feedItem}>
+              <span style={S.dot('#f0a500')} />
+              <div>
+                <div>Pool: {Math.floor(stats?.seasonPool ?? 0).toLocaleString()} $RTM</div>
+                <div style={S.panelSubtext}>
+                  Growing from purchases
+                </div>
+              </div>
+            </div>
+
+            <div style={S.feedItem}>
+              <span style={S.dot('#9d7fd4')} />
+              <div>
+                <div>Network hash: {stats?.networkHash}</div>
+                <div style={S.panelSubtext}>
+                  Difficulty: 8.4T
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live feed */}
+        <div style={S.panel}>
+          <div style={S.panelHead}>RECENT NETWORK FEED</div>
+          <div style={S.panelBody}>
+            {feed.length === 0 ? (
+              <div style={S.emptyFeed}>
+                No feed items yet
+              </div>
+            ) : (
+              feed.map((item) => (
+                <div key={item.id} style={{ ...S.feedItem, fontSize: 10 }}>
+                  <span style={S.dot(COLOR_MAP[item.color] ?? '#9d7fd4')} />
+                  <span
+                    style={S.feedMessage}
+                    dangerouslySetInnerHTML={{ __html: item.message }}
+                  />
+                </div>
+              ))
             )}
           </div>
-          <div style={panelBody}>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>SEASON NAME</label>
-              <input style={inp} value={name} onChange={e => setName(e.target.value)} />
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>STATUS</label>
-              <select style={{ ...inp }} value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="active">Active</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="ended">Ended</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>END DATE</label>
-              <input style={inp} type="date" value={endsAt} onChange={e => setEndsAt(e.target.value)} />
-            </div>
-
-            {/* Pool controls */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>CURRENT POOL ($RTM)</label>
-              <input 
-                style={inp} 
-                type="number" 
-                min="0" 
-                value={poolCurrent} 
-                onChange={e => setPoolCurrent(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>TARGET POOL SIZE ($RTM)</label>
-              <input 
-                style={inp} 
-                type="number" 
-                min="0" 
-                value={poolSize} 
-                onChange={e => setPoolSize(e.target.value)}
-                placeholder="100000"
-              />
-            </div>
-
-            {/* Pool info */}
-            <div style={{
-              background: '#080a0f', border: '1px solid #1a2230',
-              borderRadius: 4, padding: '10px 12px', marginBottom: 12,
-            }}>
-              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', marginBottom: 6 }}>POOL INFO</div>
-              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div>Target: <span style={{ color: '#f0a500' }}>{(parseFloat(poolSize) || 0).toLocaleString()} $RTM</span></div>
-                <div>Current: <span style={{ color: '#00e5a0' }}>{Math.floor(currentPoolNum).toLocaleString()} $RTM</span></div>
-                <div>Filled: <span style={{ color: '#9d7fd4' }}>
-                  {parseFloat(poolSize) ? ((currentPoolNum / parseFloat(poolSize)) * 100).toFixed(1) : 0}%
-                </span></div>
-              </div>
-            </div>
-
-            <button style={btn('#9d7fd4', '#0f0820', '#7b5ea7')} disabled={saving} onClick={saveSeason}>
-              {saving ? 'SAVING...' : 'SAVE SEASON'}
-            </button>
-            <button style={{ ...btn('#ff4455', '#1a0810', '#ff4455'), marginTop: 6 }} disabled={saving} onClick={endSeason}>
-              END SEASON EARLY
-            </button>
-            <button style={{ ...btn('#00e5a0', '#0a1a10', '#00e5a0'), marginTop: 6 }} disabled={saving} onClick={createNewSeason}>
-              + CREATE NEW SEASON
-            </button>
-          </div>
-        </div>
-
-        {/* Reward tiers */}
-        <div style={panel}>
-          <div style={panelHead}>
-            REWARD TIERS
-            <span style={{
-              marginLeft: 8,
-              color: pctOk ? '#00e5a0' : '#ff4455',
-              fontSize: 9,
-            }}>
-              TOTAL: {totalPct}% {pctOk ? '✓' : '(must = 100%)'}
-            </span>
-          </div>
-          <div style={panelBody}>
-            <div style={{
-              fontFamily: "'Share Tech Mono'", fontSize: 9,
-              color: '#4a5a70', letterSpacing: '2px',
-              paddingBottom: 8, borderBottom: '1px solid #1a2230', marginBottom: 12,
-            }}>
-              POOL DISTRIBUTION
-            </div>
-
-            {[
-              { label: 'TOP 10 SHARE (%)',    val: top10,   set: setTop10   },
-              { label: 'TOP 100 SHARE (%)',   val: top100,  set: setTop100  },
-              { label: 'TOP 1,000 SHARE (%)', val: top1000, set: setTop1000 },
-              { label: 'RANDOM ACTIVE (%)',   val: random,  set: setRandom  },
-            ].map(row => (
-              <div key={row.label} style={{ marginBottom: 12 }}>
-                <label style={lbl}>{row.label}</label>
-                <input
-                  style={inp} type="number" min="0" max="100"
-                  value={row.val}
-                  onChange={e => row.set(e.target.value)}
-                />
-              </div>
-            ))}
-
-            {/* Preview */}
-            <div style={{
-              background: '#080a0f', border: '1px solid #1a2230',
-              borderRadius: 4, padding: '10px 12px', marginBottom: 12,
-            }}>
-              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', marginBottom: 6 }}>PREVIEW (based on current pool)</div>
-              {[
-                { tier: 'TOP 10',   pct: parseInt(top10),   count: 10  },
-                { tier: 'TOP 100',  pct: parseInt(top100),  count: 90  },
-                { tier: 'TOP 1K',   pct: parseInt(top1000), count: 900 },
-              ].map(row => {
-                const poolAmt = currentPoolNum * (row.pct / 100)
-                const perUser = poolAmt / row.count
-                return (
-                  <div key={row.tier} style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: '#c0cce0', marginBottom: 4 }}>
-                    {row.tier} → <span style={{ color: '#f0a500' }}>{Math.floor(poolAmt).toLocaleString()} $RTM</span>
-                    {' '}= <span style={{ color: '#00e5a0' }}>{Math.floor(perUser).toLocaleString()} $RTM each</span>
-                  </div>
-                )
-              })}
-            </div>
-
-            <button
-              style={btn(pctOk ? '#9d7fd4' : '#4a5a70', '#0f0820', pctOk ? '#7b5ea7' : '#1a2230')}
-              disabled={!pctOk || saving}
-              onClick={() => showToast('✓ Reward tiers saved (applied at season end)')}
-            >
-              SAVE TIERS
-            </button>
-          </div>
         </div>
       </div>
-
-      {toast && (
-        <div style={{
-          position: 'fixed', bottom: 20, right: 20,
-          background: '#0f0820', border: '1px solid #7b5ea7',
-          color: '#9d7fd4', fontFamily: "'Share Tech Mono'",
-          fontSize: 11, padding: '10px 16px', borderRadius: 4, zIndex: 999,
-        }}>
-          {toast}
-        </div>
-      )}
     </div>
   )
 }
