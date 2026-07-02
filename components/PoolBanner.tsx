@@ -4,7 +4,7 @@ import { useStore } from '@/store/useStore'
 export default function PoolBanner() {
   const { season } = useStore()
 
-  const pool       = season ? Math.floor(season.pool_current) : 0
+  const pool = season ? Math.floor(season.pool_size) : 0
   const poolMax    = season ? season.pool_size : 100_000
   const barPct     = Math.min(100, (pool / poolMax) * 100)
   const endsAt     = season ? new Date(season.ends_at) : null
