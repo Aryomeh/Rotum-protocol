@@ -4,12 +4,12 @@ import { useStore } from '@/store/useStore'
 export default function PoolBanner() {
   const { season } = useStore()
 
-  // Show the total allocated target pool size instead of the empty current pool
-  const pool       = season ? season.pool_size : 10_000
+  // Dynamic values representing current user filled pool vs max allocated capacity
+  const pool       = season ? Math.floor(season.pool_current) : 0
   const poolMax    = season ? season.pool_size : 10_000
   
-  // Since the pool size is fully allocated, set the bar progress to 100%
-  const barPct     = 100
+  // Calculate dynamic fill percentage based on user actions
+  const barPct     = poolMax > 0 ? Math.min(100, (pool / poolMax) * 100) : 0
   
   const endsAt     = season ? new Date(season.ends_at) : null
   const daysLeft   = endsAt
@@ -31,11 +31,20 @@ export default function PoolBanner() {
         SEASON REWARD POOL
       </div>
 
+      {/* Main Display: Shows current filled progress / target maximum */}
       <div
         className="font-mono font-bold glow-purple"
-        style={{ fontSize: 30, color: 'var(--rtm-purple)', lineHeight: 1 }}
+        style={{ fontSize: 26, color: 'var(--rtm-purple)', lineHeight: 1 }}
       >
         {pool.toLocaleString()}
+        <span 
+          style={{ fontSize: 14, color: 'var(--rtm-muted)', fontWeight: 'normal', marginLeft: '4px', marginRight: '4px' }}
+        >
+          /
+        </span>
+        <span style={{ color: 'var(--rtm-purple)' }}>
+          {poolMax.toLocaleString()}
+        </span>
         <span
           className="ml-1"
           style={{ fontSize: 14, color: 'var(--rtm-accent)' }}
