@@ -32,6 +32,13 @@ interface InstallState {
   done:      boolean
 }
 
+function getTelegramWebApp() {
+  if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+    return (window as any).Telegram.WebApp
+  }
+  return null
+}
+
 export default function Nodes() {
   const { user, upgrades, userNodes, setUserNodes, setUser } = useStore()
   const [toast, setToast]       = useState<string | null>(null)
@@ -52,6 +59,41 @@ export default function Nodes() {
     acc[u.category].push(u)
     return acc
   }, {})
+
+  // ✅ Recover in-progress install on mount — survives closing the app
+  useEffect(() => {
+    if (!user?.id) return
+
+    const tg = getTelegramWebApp()
+    const key = `node_installing_${user.id}`
+
+    const restore = (raw: string) => {
+      try {
+        const saved: InstallState = JSON.parse(raw)
+        const elapsed = (Date.now() - saved.startedAt) / 1000
+        if (elapsed >= saved.duration) {
+          setInstalling({ ...saved, done: true })
+          setProgress(100)
+          setTimeLeft(0)
+        } else {
+          setInstalling(saved)
+          setProgress(Math.min(100, (elapsed / saved.duration) * 100))
+          setTimeLeft(Math.max(0, saved.duration - elapsed))
+        }
+      } catch {
+        // ignore malformed saved state
+      }
+    }
+
+    if (tg?.CloudStorage) {
+      tg.CloudStorage.getItem(key, (err: any, value: string) => {
+        if (!err && value) restore(value)
+      })
+    } else {
+      const raw = localStorage.getItem(key)
+      if (raw) restore(raw)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!installing || installing.done) return
@@ -126,20 +168,18 @@ export default function Nodes() {
       if (!initData.success) throw new Error(initData.error || 'Initialization rejected')
 
       // 2. Format request payload for client wallet execution
-      // Nodes.tsx — inside payWithTON, replace transactionPayload with this:
       const transactionPayload = {
         validUntil: Math.floor(Date.now() / 1000) + 360,
         messages: [
           {
             address: initData.merchantWallet,
             amount: toNano(tonPrice),
-            // no payload field at all
           }
         ]
       }
 
       await tonConnectUI.sendTransaction(transactionPayload)
-      
+
       // 3. Close payment UI and kickoff installer
       setPayModal(null)
       await startInstall(upgrade, 0)
@@ -159,16 +199,28 @@ export default function Nodes() {
       setUser({ ...user, rtm_balance: user.rtm_balance - cost })
     }
 
-    setInstalling({
+    const newInstall: InstallState = {
       slug:      upgrade.slug,
       name:      upgrade.name,
       cost,
       startedAt: Date.now(),
       duration,
       done:      false,
-    })
+    }
+
+    setInstalling(newInstall)
     setProgress(0)
     setTimeLeft(duration)
+
+    // ✅ persist so it survives closing the app
+    const tg = getTelegramWebApp()
+    const key = `node_installing_${user.id}`
+    const value = JSON.stringify(newInstall)
+    if (tg?.CloudStorage) {
+      tg.CloudStorage.setItem(key, value)
+    } else {
+      localStorage.setItem(key, value)
+    }
   }
 
   async function completeInstall() {
@@ -187,6 +239,7 @@ export default function Nodes() {
         if (installing.cost > 0) {
           setUser({ ...user, rtm_balance: user.rtm_balance + installing.cost })
         }
+        clearPersistedInstall()
         setInstalling(null)
         return
       }
@@ -208,58 +261,49 @@ export default function Nodes() {
     } catch {
       showToast('Network error')
     }
+
+    // ✅ clear persisted state now that install is complete
+    clearPersistedInstall()
     setInstalling(null)
+  }
+
+  function clearPersistedInstall() {
+    if (!user?.id) return
+    const tg = getTelegramWebApp()
+    const key = `node_installing_${user.id}`
+    if (tg?.CloudStorage) {
+      tg.CloudStorage.removeItem(key)
+    } else {
+      localStorage.removeItem(key)
+    }
   }
 
   return (
     <div className="animate-page px-3 pt-3">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <div className="section-label" style={{ paddingBottom: 0 }}>NODE INFRASTRUCTURE</div>
-        <div className="font-mono text-xs" style={{ color: 'var(--rtm-amber)' }}>
-          BAL: <span style={{ color: 'var(--rtm-text)' }}>{Math.floor(user?.rtm_balance ?? 0).toLocaleString()} $RTM</span>
-        </div>
-      </div>
-
-      {/* Active install banner */}
       {installing && (
-        <div style={{
-          background:   '#0a1020',
-          border:       `1px solid ${installing.done ? 'var(--rtm-green)' : 'var(--rtm-purple)'}`,
-          borderRadius: 6,
-          padding:      '12px',
-          marginBottom: 12,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, color: installing.done ? 'var(--rtm-green)' : 'var(--rtm-purple)' }}>
+        <div className="rtm-card rtm-card-purple mb-3 px-3 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-mono text-xs" style={{ color: 'var(--rtm-purple)' }}>
               {installing.done ? '✓ INSTALL COMPLETE' : '⚙ INSTALLING...'}
             </div>
-            <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)' }}>
+            <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>
               {installing.done ? 'Ready to activate' : formatTime(timeLeft) + ' left'}
             </div>
           </div>
 
-          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 12, color: 'var(--rtm-text)', marginBottom: 8 }}>
+          <div className="font-head mb-2" style={{ fontSize: 14, color: 'var(--rtm-text)' }}>
             {installing.name}
           </div>
 
-          <div style={{ height: 4, background: '#1a2230', borderRadius: 2, overflow: 'hidden', marginBottom: 8 }}>
-            <div style={{
-              height:     '100%',
-              width:      progress + '%',
-              background: installing.done
-                ? 'var(--rtm-green)'
-                : 'linear-gradient(90deg, #3a2060, var(--rtm-purple))',
-              borderRadius: 2,
-              transition: 'width 1s linear',
-            }} />
+          <div className="progress-track mb-2">
+            <div className="progress-fill-green" style={{ width: `${progress}%` }} />
           </div>
 
-          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: 'var(--rtm-muted)', marginBottom: installing.done ? 10 : 0 }}>
-            {installing.done
-              ? 'Node ready — tap to activate and update your hash rate'
-              : `Initializing ${installing.name.toLowerCase()} hardware stack...`}
-          </div>
+          {!installing.done && (
+            <div className="font-mono text-xs" style={{ color: 'var(--rtm-muted)' }}>
+              Initializing {installing.name.toLowerCase()} hardware stack...
+            </div>
+          )}
 
           {installing.done && (
             <button

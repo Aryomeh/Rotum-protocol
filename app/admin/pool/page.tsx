@@ -40,7 +40,7 @@ const btn = (color: string, bg: string, border: string): React.CSSProperties => 
 
 const AIRDROP_RESERVE = 2_000_000 // 60% of 10M supply
 
-export default function AdminSeason() {
+export default function AdminPool() {
   const [season, setSeason]         = useState<Season | null>(null)
   const [loading, setLoading]       = useState(true)
   const [saving, setSaving]         = useState(false)
@@ -51,7 +51,8 @@ export default function AdminSeason() {
   const [name, setName]         = useState('')
   const [status, setStatus]     = useState('active')
   const [endsAt, setEndsAt]     = useState('')
-  const [poolSize, setPoolSize] = useState('10000') // ✅ Added pool_size input state
+  const [poolSize, setPoolSize] = useState('10000')
+  const [poolCurrent, setPoolCurrent] = useState('0') // ✅ Admin-set current pool amount
   const [top10, setTop10]       = useState('40')
   const [top100, setTop100]     = useState('30')
   const [top1000, setTop1000]   = useState('20')
@@ -73,15 +74,16 @@ export default function AdminSeason() {
       setName(latest.name)
       setStatus(latest.status)
       setEndsAt(latest.ends_at?.split('T')[0] ?? '')
-      setPoolSize(latest.pool_size.toString()) // ✅ Set pool size input value from DB
+      setPoolSize(latest.pool_size.toString())
+      setPoolCurrent(latest.pool_current.toString()) // ✅ load current pool value
     } else {
       setName('')
       setStatus('active')
       setEndsAt('')
       setPoolSize('10000')
+      setPoolCurrent('0')
     }
 
-    // Sum all pool_size across every season to compute remaining airdrop reserve
     const { data: allSeasons } = await supabase
       .from('seasons')
       .select('pool_size')
@@ -109,12 +111,13 @@ export default function AdminSeason() {
         name,
         status,
         ends_at: new Date(endsAt).toISOString(),
-        pool_size: Number(poolSize), // ✅ Added pool_size payload mutation
+        pool_size: Number(poolSize),
+        pool_current: Number(poolCurrent), // ✅ send the admin-set pool value
       }),
     })
     const json = await res.json()
     if (!json.success) showToast('❌ Error: ' + json.error)
-    else { showToast('✓ Season saved'); loadSeason() }
+    else { showToast('✓ Pool saved'); loadSeason() }
     setSaving(false)
   }
 
@@ -171,7 +174,7 @@ export default function AdminSeason() {
   return (
     <div>
       <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, color: '#4a5a70', letterSpacing: '3px', marginBottom: 16 }}>
-        🏆 SEASON MANAGEMENT
+        💰 POOL MANAGEMENT
       </div>
 
       {/* Airdrop Reserve Banner */}
@@ -242,15 +245,25 @@ export default function AdminSeason() {
             }}>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', marginBottom: 6 }}>POOL INFO</div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                
-                {/* ✅ Changed Target layout from static text to editable input field */}
+
                 <div style={{ marginBottom: 8 }}>
                   <label style={{ ...lbl, marginBottom: 3 }}>TARGET POOL SIZE ($RTM)</label>
-                  <input 
-                    style={inp} 
-                    type="number" 
-                    value={poolSize} 
-                    onChange={e => setPoolSize(e.target.value)} 
+                  <input
+                    style={inp}
+                    type="number"
+                    value={poolSize}
+                    onChange={e => setPoolSize(e.target.value)}
+                  />
+                </div>
+
+                {/* ✅ New: directly set the current/live pool amount */}
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ ...lbl, marginBottom: 3 }}>SET CURRENT POOL ($RTM)</label>
+                  <input
+                    style={inp}
+                    type="number"
+                    value={poolCurrent}
+                    onChange={e => setPoolCurrent(e.target.value)}
                   />
                 </div>
 
@@ -266,7 +279,7 @@ export default function AdminSeason() {
             </button>
 
             <button style={btn('#9d7fd4', '#0f0820', '#7b5ea7')} disabled={saving} onClick={saveSeason}>
-              {saving ? 'SAVING...' : 'SAVE SEASON'}
+              {saving ? 'SAVING...' : 'SAVE POOL'}
             </button>
             <button style={{ ...btn('#ff4455', '#1a0810', '#ff4455'), marginTop: 6 }} disabled={saving} onClick={endSeason}>
               END SEASON EARLY
