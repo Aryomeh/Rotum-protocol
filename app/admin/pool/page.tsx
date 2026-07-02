@@ -65,13 +65,17 @@ export default function AdminSeason() {
       .select('*')
       .order('id', { ascending: false })
       .limit(1)
-      .single()
 
-    if (data) {
-      setSeason(data)
-      setName(data.name)
-      setStatus(data.status)
-      setEndsAt(data.ends_at?.split('T')[0] ?? '')
+    const latest = data?.[0] ?? null
+    setSeason(latest)
+    if (latest) {
+      setName(latest.name)
+      setStatus(latest.status)
+      setEndsAt(latest.ends_at?.split('T')[0] ?? '')
+    } else {
+      setName('')
+      setStatus('active')
+      setEndsAt('')
     }
 
     // Sum all pool_size across every season to compute remaining airdrop reserve
@@ -91,32 +95,21 @@ export default function AdminSeason() {
     setTimeout(() => setToast(''), 2800)
   }
 
-  async function resetPool() {
-    if (!season) return
-    if (!confirm('Reset pool_current and pool_size to 0 for this season?')) return
-    setSaving(true)
-    const { error } = await supabase
-      .from('seasons')
-      .update({ pool_current: 0, pool_size: 0 })
-      .eq('id', season.id)
-    if (error) showToast('❌ Error: ' + error.message)
-    else { showToast('✓ Pool reset to 0'); loadSeason() }
-    setSaving(false)
-  }
-
   async function saveSeason() {
     if (!season) return
     setSaving(true)
-    const { error } = await supabase
-      .from('seasons')
-      .update({
+    const res = await fetch('/api/admin/season/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: season.id,
         name,
         status,
         ends_at: new Date(endsAt).toISOString(),
-      })
-      .eq('id', season.id)
-
-    if (error) showToast('❌ Error: ' + error.message)
+      }),
+    })
+    const json = await res.json()
+    if (!json.success) showToast('❌ Error: ' + json.error)
     else { showToast('✓ Season saved'); loadSeason() }
     setSaving(false)
   }
@@ -125,31 +118,39 @@ export default function AdminSeason() {
     if (!season) return
     if (!confirm('End season early and queue reward distribution?')) return
     setSaving(true)
-    const { error } = await supabase
-      .from('seasons')
-      .update({ status: 'ended', ends_at: new Date().toISOString() })
-      .eq('id', season.id)
-
-    if (error) showToast('❌ Error: ' + error.message)
+    const res = await fetch('/api/admin/season/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: season.id }),
+    })
+    const json = await res.json()
+    if (!json.success) showToast('❌ Error: ' + json.error)
     else showToast('✓ Season ended — go to Rewards to distribute')
     setSaving(false)
     loadSeason()
   }
 
+  async function resetPool() {
+    if (!season) return
+    if (!confirm('Reset pool_current and pool_size to 0 for this season?')) return
+    setSaving(true)
+    const res = await fetch('/api/admin/season/reset-pool', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: season.id }),
+    })
+    const json = await res.json()
+    if (!json.success) showToast('❌ Error: ' + json.error)
+    else { showToast('✓ Pool reset to 0'); loadSeason() }
+    setSaving(false)
+  }
+
   async function createNewSeason() {
     if (!confirm('Create a new season? Current season must be ended first.')) return
     setSaving(true)
-    const startDate = new Date()
-    const endDate   = new Date(startDate.getTime() + 30 * 86_400_000)
-    const { error } = await supabase.from('seasons').insert({
-      name:        'Season ' + ((season?.id ?? 0) + 1),
-      status:      'upcoming',
-      pool_size:   100000,
-      pool_current: 0,
-      starts_at:   startDate.toISOString(),
-      ends_at:     endDate.toISOString(),
-    })
-    if (error) showToast('❌ Error: ' + error.message)
+    const res = await fetch('/api/admin/season/create', { method: 'POST' })
+    const json = await res.json()
+    if (!json.success) showToast('❌ Error: ' + json.error)
     else { showToast('✓ New season created'); loadSeason() }
     setSaving(false)
   }

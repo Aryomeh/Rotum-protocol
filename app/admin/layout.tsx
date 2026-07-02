@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 const NAV = [
   { section: 'OVERVIEW' },
   { id: '/admin',          label: '📊 Dashboard' },
-  { id: '/admin/season',   label: '🏆 Season'    },
+  { id: '/admin/pool',   label: '🏆 Season'    },
   { section: 'CONTROL' },
   { id: '/admin/pool',     label: '💰 Pool & Mining' },
   { id: '/admin/store',    label: '🛒 Power Store'   },
