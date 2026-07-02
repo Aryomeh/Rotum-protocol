@@ -38,7 +38,7 @@ const btn = (color: string, bg: string, border: string): React.CSSProperties => 
   letterSpacing: '1px', marginTop: 8,
 })
 
-const AIRDROP_RESERVE = 6_000_000 // 60% of 10M supply
+const AIRDROP_RESERVE = 2_000_000 // 60% of 10M supply
 
 export default function AdminSeason() {
   const [season, setSeason]         = useState<Season | null>(null)
@@ -51,6 +51,7 @@ export default function AdminSeason() {
   const [name, setName]         = useState('')
   const [status, setStatus]     = useState('active')
   const [endsAt, setEndsAt]     = useState('')
+  const [poolSize, setPoolSize] = useState('10000') // ✅ Added pool_size input state
   const [top10, setTop10]       = useState('40')
   const [top100, setTop100]     = useState('30')
   const [top1000, setTop1000]   = useState('20')
@@ -72,10 +73,12 @@ export default function AdminSeason() {
       setName(latest.name)
       setStatus(latest.status)
       setEndsAt(latest.ends_at?.split('T')[0] ?? '')
+      setPoolSize(latest.pool_size.toString()) // ✅ Set pool size input value from DB
     } else {
       setName('')
       setStatus('active')
       setEndsAt('')
+      setPoolSize('10000')
     }
 
     // Sum all pool_size across every season to compute remaining airdrop reserve
@@ -106,6 +109,7 @@ export default function AdminSeason() {
         name,
         status,
         ends_at: new Date(endsAt).toISOString(),
+        pool_size: Number(poolSize), // ✅ Added pool_size payload mutation
       }),
     })
     const json = await res.json()
@@ -238,10 +242,21 @@ export default function AdminSeason() {
             }}>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', marginBottom: 6 }}>POOL INFO</div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div>Target: <span style={{ color: '#f0a500' }}>{(season?.pool_size ?? 0).toLocaleString()} $RTM</span></div>
+                
+                {/* ✅ Changed Target layout from static text to editable input field */}
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ ...lbl, marginBottom: 3 }}>TARGET POOL SIZE ($RTM)</label>
+                  <input 
+                    style={inp} 
+                    type="number" 
+                    value={poolSize} 
+                    onChange={e => setPoolSize(e.target.value)} 
+                  />
+                </div>
+
                 <div>Current: <span style={{ color: '#00e5a0' }}>{Math.floor(season?.pool_current ?? 0).toLocaleString()} $RTM</span></div>
                 <div>Filled: <span style={{ color: '#9d7fd4' }}>
-                  {season ? ((season.pool_current / season.pool_size) * 100).toFixed(1) : 0}%
+                  {season && season.pool_size > 0 ? ((season.pool_current / season.pool_size) * 100).toFixed(1) : 0}%
                 </span></div>
               </div>
             </div>
