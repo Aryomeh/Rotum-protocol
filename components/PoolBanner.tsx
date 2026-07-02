@@ -4,9 +4,13 @@ import { useStore } from '@/store/useStore'
 export default function PoolBanner() {
   const { season } = useStore()
 
-  const pool = season ? Math.floor(season.pool_current) : 0  // ✅ CORRECT
-  const poolMax    = season ? season.pool_size : 100_000
-  const barPct     = Math.min(100, (pool / poolMax) * 100)
+  // Show the total allocated target pool size instead of the empty current pool
+  const pool       = season ? season.pool_size : 10_000
+  const poolMax    = season ? season.pool_size : 10_000
+  
+  // Since the pool size is fully allocated, set the bar progress to 100%
+  const barPct     = 100
+  
   const endsAt     = season ? new Date(season.ends_at) : null
   const daysLeft   = endsAt
     ? Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86_400_000))
