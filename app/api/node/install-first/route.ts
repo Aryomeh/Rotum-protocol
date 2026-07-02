@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   try {
     // Get auth token from header
     const authHeader = req.headers.get('authorization')
@@ -43,13 +44,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Create first default node (e.g., basic hardware node)
-    const { data: upgradeData, error: upgradeError } = await supabase
+    const { data: upgradeRows, error: upgradeError } = await supabase
       .from('upgrade_catalogue')
       .select('slug')
       .eq('category', 'hardware')
       .order('sort_order')
       .limit(1)
-      .single()
+
+    const upgradeData = upgradeRows?.[0]
 
     if (upgradeError || !upgradeData) {
       console.error('Error fetching default upgrade:', upgradeError)

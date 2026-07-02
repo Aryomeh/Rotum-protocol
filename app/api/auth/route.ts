@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server'
 import { validateTelegramInitData } from '@/lib/telegram'
 import { getSupabaseAdmin } from '@/lib/supabase'
