@@ -7,11 +7,10 @@ export const runtime = 'edge'
 
 // GET /api/watch-ad?userId=xxx
 // Returns how many ads the user has already watched toward each ad-eligible item.
-export async function POST(req: NextRequest) {
-  try {
-    const rawBody = await req.text()
-    console.log('[watch-ad POST] raw body:', rawBody)
-    const { userId, itemSlug } = JSON.parse(rawBody)
+export async function GET(req: NextRequest) {
+  const userId = req.nextUrl.searchParams.get('userId')
+  console.log('[watch-ad GET] userId param:', userId)
+  if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
   const db = getSupabaseAdmin()
   const { data, error } = await db
@@ -34,7 +33,9 @@ export async function POST(req: NextRequest) {
 // and resets the counter.
 export async function POST(req: NextRequest) {
   try {
-    const { userId, itemSlug } = await req.json()
+    const rawBody = await req.text()
+    console.log('[watch-ad POST] raw body:', rawBody)
+    const { userId, itemSlug } = JSON.parse(rawBody)
 
     const required = AD_UNLOCK_REQUIREMENTS[itemSlug]
     const item     = SHOP_ITEMS[itemSlug]
