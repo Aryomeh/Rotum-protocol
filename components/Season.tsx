@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import Tasks from './Tasks'
+import { showRewardedAd } from '@/lib/ads'
+import { AD_UNLOCK_REQUIREMENTS } from '@/lib/adConfig'
 
 const SHOP_ITEMS = [
   { slug: 'hash_boost_24h',   icon: '⚡', name: 'Hash Boost (24h)',  desc: '2× your hash rate for 24 hours',   stars: 25  },
@@ -45,11 +47,49 @@ export default function Season() {
   const [activeTab, setTab]     = useState<Tab>('SEASON')
   const [buying, setBuying]     = useState<string | null>(null)
   const [toast, setToast]       = useState<string | null>(null)
+  const [adProgress, setAdProgress] = useState<Record<string, number>>({})
+  const [watchingAd, setWatchingAd] = useState<string | null>(null)
   const countdown = useCountdown(season?.ends_at ?? null)
+
+  useEffect(() => {
+    if (!user) return
+    fetch(`/api/watch-ad?userId=${user.id}`)
+      .then(res => res.json())
+      .then(data => { if (data.success) setAdProgress(data.progress) })
+      .catch(() => {})
+  }, [user])
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(null), 3000)
+  }
+
+  async function handleWatchAd(slug: string) {
+    if (!user || watchingAd || buying) return
+    setWatchingAd(slug)
+    try {
+      await showRewardedAd()
+      const res = await fetch('/api/watch-ad', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: user.id, itemSlug: slug }),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        showToast(data.error || 'Could not record ad view')
+        return
+      }
+      setAdProgress(prev => ({ ...prev, [slug]: data.watched }))
+      if (data.completed) {
+        showToast('🎉 Reward unlocked — item applied!')
+      } else {
+        showToast(`Ad watched! ${data.watched}/${data.required}`)
+      }
+    } catch {
+      showToast('Ad not available — try again shortly')
+    } finally {
+      setWatchingAd(null)
+    }
   }
 
   async function handleBuy(slug: string, stars: number) {
@@ -188,6 +228,9 @@ export default function Season() {
           <div className="flex flex-col gap-2 mb-4">
             {SHOP_ITEMS.map(item => {
               const isBuying = buying === item.slug
+              const adsRequired = AD_UNLOCK_REQUIREMENTS[item.slug]
+              const isWatchingAd = watchingAd === item.slug
+              const watched = adProgress[item.slug] ?? 0
               return (
                 <div key={item.slug} className="rtm-card flex items-center gap-3 px-3 py-2.5">
                   <div className="text-xl flex-shrink-0 w-8 text-center">{item.icon}</div>
@@ -199,25 +242,47 @@ export default function Season() {
                       {item.desc}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleBuy(item.slug, item.stars)}
-                    disabled={isBuying || !user}
-                    style={{
-                      flexShrink:   0,
-                      background:   isBuying ? '#0a0d14' : '#0a1a10',
-                      border:       `1px solid ${isBuying ? 'var(--rtm-border)' : 'var(--rtm-green)'}`,
-                      color:        isBuying ? 'var(--rtm-muted)' : 'var(--rtm-green)',
-                      fontFamily:   "'Share Tech Mono', monospace",
-                      fontSize:     11,
-                      padding:      '5px 10px',
-                      borderRadius: 3,
-                      cursor:       isBuying || !user ? 'not-allowed' : 'pointer',
-                      transition:   'all .2s',
-                      whiteSpace:   'nowrap',
-                    }}
-                  >
-                    {isBuying ? '...' : `⭐ ${item.stars}`}
-                  </button>
+                  <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
+                    <button
+                      onClick={() => handleBuy(item.slug, item.stars)}
+                      disabled={isBuying || isWatchingAd || !user}
+                      style={{
+                        background:   isBuying ? '#0a0d14' : '#0a1a10',
+                        border:       `1px solid ${isBuying ? 'var(--rtm-border)' : 'var(--rtm-green)'}`,
+                        color:        isBuying ? 'var(--rtm-muted)' : 'var(--rtm-green)',
+                        fontFamily:   "'Share Tech Mono', monospace",
+                        fontSize:     11,
+                        padding:      '5px 10px',
+                        borderRadius: 3,
+                        cursor:       isBuying || isWatchingAd || !user ? 'not-allowed' : 'pointer',
+                        transition:   'all .2s',
+                        whiteSpace:   'nowrap',
+                      }}
+                    >
+                      {isBuying ? '...' : `⭐ ${item.stars}`}
+                    </button>
+
+                    {adsRequired && (
+                      <button
+                        onClick={() => handleWatchAd(item.slug)}
+                        disabled={isBuying || isWatchingAd || !user}
+                        style={{
+                          background:   isWatchingAd ? '#0a0d14' : '#150c22',
+                          border:       `1px solid ${isWatchingAd ? 'var(--rtm-border)' : 'var(--rtm-purple)'}`,
+                          color:        isWatchingAd ? 'var(--rtm-muted)' : 'var(--rtm-purple)',
+                          fontFamily:   "'Share Tech Mono', monospace",
+                          fontSize:     10,
+                          padding:      '4px 10px',
+                          borderRadius: 3,
+                          cursor:       isBuying || isWatchingAd || !user ? 'not-allowed' : 'pointer',
+                          transition:   'all .2s',
+                          whiteSpace:   'nowrap',
+                        }}
+                      >
+                        {isWatchingAd ? '⏳ LOADING...' : `▶ ${watched}/${adsRequired} ADS`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}

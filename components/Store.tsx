@@ -5,6 +5,7 @@ import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react'
 import { NODE_TON_PRICES, toNano } from '@/lib/tonconnect'
 
 const EARLY_CONTRIBUTOR_PRICE_TON = 1.0
+const EARLY_CONTRIBUTOR_ENABLED   = false   // flip to true when ready to go live
 
 export default function Store() {
   const { user, setUser } = useStore()
@@ -82,26 +83,28 @@ export default function Store() {
       {/* Early Contributor — one-time offer */}
       <div style={{
         background:   '#0a0d14',
-        border:       `1px solid ${alreadyMinted || done ? '#1a4a25' : '#7b5ea7'}`,
+        border:       `1px solid ${alreadyMinted || done ? '#1a4a25' : EARLY_CONTRIBUTOR_ENABLED ? '#7b5ea7' : '#1a2230'}`,
         borderRadius: 8,
         overflow:     'hidden',
         marginBottom: 12,
       }}>
         {/* Badge */}
         <div style={{
-          background:   alreadyMinted || done ? '#0a2a14' : 'linear-gradient(90deg, #1a0830, #0f0420)',
-          borderBottom: `1px solid ${alreadyMinted || done ? '#1a4a25' : '#3a1060'}`,
+          background:   alreadyMinted || done ? '#0a2a14' : EARLY_CONTRIBUTOR_ENABLED ? 'linear-gradient(90deg, #1a0830, #0f0420)' : '#0a0d14',
+          borderBottom: `1px solid ${alreadyMinted || done ? '#1a4a25' : EARLY_CONTRIBUTOR_ENABLED ? '#3a1060' : '#1a2230'}`,
           padding:      '8px 14px',
           display:      'flex',
           alignItems:   'center',
           justifyContent: 'space-between',
         }}>
-          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: alreadyMinted || done ? '#00e5a0' : '#9d7fd4', letterSpacing: '2px' }}>
+          <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: alreadyMinted || done ? '#00e5a0' : EARLY_CONTRIBUTOR_ENABLED ? '#9d7fd4' : 'var(--rtm-muted)', letterSpacing: '2px' }}>
             ⚡ ONE-TIME OFFER
           </div>
           {alreadyMinted || done
             ? <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#00e5a0', background: '#0a2a14', border: '1px solid #1a4a25', padding: '2px 8px', borderRadius: 2 }}>CLAIMED ✓</div>
-            : <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#f0a500' }}>LIMITED</div>
+            : !EARLY_CONTRIBUTOR_ENABLED
+              ? <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: 'var(--rtm-muted)', background: '#0a0d14', border: '1px solid #1a2230', padding: '2px 8px', borderRadius: 2 }}>COMING SOON</div>
+              : <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#f0a500' }}>LIMITED</div>
           }
         </div>
 
@@ -150,15 +153,23 @@ export default function Store() {
             }}>
               ✓ CLAIMED — Check your TON wallet
             </div>
+          ) : !EARLY_CONTRIBUTOR_ENABLED ? (
+            <div style={{
+              width:        '100%',
+              background:   '#0a0d14',
+              border:       '1px solid #1a2230',
+              color:        'var(--rtm-muted)',
+              fontFamily:   "'Share Tech Mono'",
+              fontSize:     12,
+              padding:      '13px 0',
+              borderRadius: 4,
+              textAlign:    'center',
+              letterSpacing: '1px',
+            }}>
+              🔒 COMING SOON
+            </div>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 10, color: 'var(--rtm-muted)' }}>PRICE</div>
-                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 16, color: '#00aaff', fontWeight: 700 }}>
-                  {EARLY_CONTRIBUTOR_PRICE_TON} TON
-                </div>
-              </div>
-
               {!walletAddress && (
                 <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#f0a500', marginBottom: 8, textAlign: 'center' }}>
                   ⚠ Connect your TON wallet in Profile to purchase
