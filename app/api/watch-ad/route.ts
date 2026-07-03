@@ -7,9 +7,11 @@ export const runtime = 'edge'
 
 // GET /api/watch-ad?userId=xxx
 // Returns how many ads the user has already watched toward each ad-eligible item.
-export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get('userId')
-  if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+export async function POST(req: NextRequest) {
+  try {
+    const rawBody = await req.text()
+    console.log('[watch-ad POST] raw body:', rawBody)
+    const { userId, itemSlug } = JSON.parse(rawBody)
 
   const db = getSupabaseAdmin()
   const { data, error } = await db
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
     // Required ad count reached — grant the reward, same as a Stars purchase but at price 0.
     const { data: purchase, error: purchaseErr } = await db.from('purchases').insert({
       user_id: userId, item_slug: itemSlug, item_name: item.name,
-      price_stars: 0, status: 'completed_via_ads', applied: false,
+      price_stars: 0, status: 'completed', applied: false,
     }).select().single()
     if (purchaseErr) throw purchaseErr
 
