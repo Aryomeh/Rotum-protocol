@@ -1,20 +1,38 @@
 'use client'
 import { useStore } from '@/store/useStore'
+import { supabase } from '@/lib/supabase' // 🌟 Ensure this path points to your initialized supabase client
 
 export default function PoolBanner() {
-  const { season } = useStore()
+  const { season, user, loadUserData, showToast } = useStore() as any 
+  // 🌟 Make sure user, loadUserData, and showToast are destructured if your store has them.
+  // If showToast/loadUserData live elsewhere, adjust or use standard console/alerts for now.
 
-  // Dynamic values representing current user filled pool vs max allocated capacity
   const pool       = season ? Math.floor(season.pool_current) : 0
   const poolMax    = season ? season.pool_size : 10_000
   
-  // Calculate dynamic fill percentage based on user actions
   const barPct     = poolMax > 0 ? Math.min(100, (pool / poolMax) * 100) : 0
   
   const endsAt     = season ? new Date(season.ends_at) : null
   const daysLeft   = endsAt
     ? Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86_400_000))
     : 0
+
+  const handleActivate = async () => {
+    if (!user?.id) return
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ mining_active: true })
+        .eq('id', user.id)
+
+      if (error) throw error
+      
+      if (typeof loadUserData === 'function') loadUserData()
+      if (typeof showToast === 'function') showToast('⚡ Mining Engine Activated!')
+    } catch (err: any) {
+      if (typeof showToast === 'function') showToast('❌ Activation failed: ' + err.message)
+    }
+  }
 
   return (
     <div
@@ -31,7 +49,6 @@ export default function PoolBanner() {
         SEASON REWARD POOL
       </div>
 
-      {/* Main Display: Shows current filled progress / target maximum */}
       <div
         className="font-mono font-bold glow-purple"
         style={{ fontSize: 26, color: 'var(--rtm-purple)', lineHeight: 1 }}
@@ -54,30 +71,57 @@ export default function PoolBanner() {
       </div>
 
       <div
-        className="font-mono text-xs mt-1.5"
+        className="font-mono text-xs mt-1.5 mb-2"
         style={{ color: 'var(--rtm-muted)' }}
       >
         {daysLeft}d remaining · 248,142 operators competing
       </div>
 
-      {/* Pool fill bar */}
-      <div className="progress-track mt-2">
-        <div
-          className="progress-fill-green"
-          style={{ width: `${barPct}%` }}
-        />
-      </div>
+      {/* ⚡ INTERACTIVE ELEMENT: Check if mining_active switch is turned on */}
+      {!user?.mining_active ? (
+        <button 
+          onClick={handleActivate}
+          style={{
+            width: '100%',
+            padding: '10px',
+            background: 'linear-gradient(90deg, #a855f7, #6366f1)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            fontFamily: "'Share Tech Mono', monospace",
+            fontSize: 12,
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            letterSpacing: '1px',
+            boxShadow: '0 0 12px rgba(168, 85, 247, 0.4)',
+            marginTop: '8px'
+          }}
+        >
+          ⚡ ACTIVATE MINING NODE
+        </button>
+      ) : (
+        /* If switch is true, hide button and show original design layout */
+        <>
+          {/* Pool fill bar */}
+          <div className="progress-track mt-2">
+            <div
+              className="progress-fill-green"
+              style={{ width: `${barPct}%` }}
+            />
+          </div>
 
-      <div
-        className="font-mono text-xs mt-1 flex justify-between"
-        style={{ color: 'var(--rtm-muted)' }}
-      >
-        <span>0</span>
-        <span style={{ color: 'var(--rtm-green)' }}>
-          {barPct.toFixed(1)}% filled
-        </span>
-        <span>{poolMax.toLocaleString()} $RTM</span>
-      </div>
+          <div
+            className="font-mono text-xs mt-1 flex justify-between"
+            style={{ color: 'var(--rtm-muted)' }}
+          >
+            <span>0</span>
+            <span style={{ color: 'var(--rtm-green)' }}>
+              {barPct.toFixed(1)}% filled
+            </span>
+            <span>{poolMax.toLocaleString()} $RTM</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
