@@ -199,47 +199,43 @@ export default function Profile({ onClose }: ProfileProps) {
             { label: 'UPTIME',     val: (user?.uptime_pct ?? 100).toFixed(1) + '%',                     color: '#00ccdd'           },
             { label: 'REFERRALS', val: loading ? '...' : String(referralStats.total),                   color: 'var(--rtm-amber)'  },
           ].map(s => (
-              <div key={s.label} style={{
-                background: '#111520', border: '1px solid #1a2230',
-                borderRadius: 6, padding: '8px 10px', textAlign: 'center',
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '52px'
-              }}>
-                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 8, color: 'var(--rtm-muted)', letterSpacing: '1px', marginBottom: 4 }}>
-                  {s.label}
-                </div>
-                <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 14, color: s.color, fontWeight: 700 }}>
-                  {s.val}
-                </div>
-
-                {/* 🟢 NEW: Boost-Aware Mining Velocity Indicator */}
-                {s.label === 'HASH POWER' && user && (
-                  (() => {
-                    // Check if the current boost is active and has not expired yet
-                    const isBoostActive = user.boost_expires_at 
-                      ? new Date(user.boost_expires_at).getTime() > Date.now() 
-                      : false;
-                    
-                    // Fall back to a multiplier of 1.0 if expired or not active
-                    const currentMultiplier = isBoostActive ? (Number(user.hash_boost) || 1.0) : 1.0;
-                    
-                    // Final hourly rate: Hash Power * Active Multiplier * 0.01 RTM
-                    const hourlyRate = Number(user.hash_power) * currentMultiplier * 0.01;
-
-                    return (
-                      <div style={{ 
-                        fontFamily: "'Share Tech Mono'", 
-                        fontSize: 10, 
-                        color: isBoostActive ? '#a855f7' : '#10b981', // Purple if boosted, green if standard
-                        marginTop: 2, 
-                        fontWeight: 500 
-                      }}>
-                        +{hourlyRate.toFixed(2)} $RTM/hr {isBoostActive && '⚡'}
-                      </div>
-                    );
-                  })()
-                )}
+            <div key={s.label} style={{
+              background: '#111520', border: '1px solid #1a2230',
+              borderRadius: 6, padding: '8px 10px', textAlign: 'center',
+              display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', minHeight: '58px' // 🌟 Changed to flex-start and slightly increased minHeight for structural alignment
+            }}>
+              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 8, color: 'var(--rtm-muted)', letterSpacing: '1px', marginBottom: 4 }}>
+                {s.label}
               </div>
-            ))}
+              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 14, color: s.color, fontWeight: 700 }}>
+                {s.val}
+              </div>
+
+              {/* 🟢 Boost-Aware Mining Velocity Indicator */}
+              {s.label === 'HASH POWER' && user && (
+                (() => {
+                  const isBoostActive = user.boost_expires_at 
+                    ? new Date(user.boost_expires_at).getTime() > Date.now() 
+                    : false;
+                  
+                  const currentMultiplier = isBoostActive ? (Number(user.hash_boost) || 1.0) : 1.0;
+                  const hourlyRate = Number(user.hash_power) * currentMultiplier * 0.01;
+
+                  return (
+                    <div style={{ 
+                      fontFamily: "'Share Tech Mono'", 
+                      fontSize: 10, 
+                      color: isBoostActive ? '#a855f7' : '#10b981', 
+                      marginTop: 2, 
+                      fontWeight: 500 
+                    }}>
+                      +{hourlyRate.toFixed(2)} $RTM/hr {isBoostActive && '⚡'}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Referral section */}
