@@ -106,30 +106,29 @@ export default function AdminUsers() {
     if (!creditId || !creditAmt) return
     setCrediting(true)
 
-    // Find user by telegram_id
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, rtm_balance')
-      .eq('telegram_id', parseInt(creditId))
-      .single()
+    try {
+      const res = await fetch('/api/admin/credit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creditId, creditAmt })
+      })
 
-    if (!user) { showToast('❌ User not found'); setCrediting(false); return }
+      const result = await res.json()
 
-    const newBalance = user.rtm_balance + parseFloat(creditAmt)
-    const { error } = await supabase
-      .from('users')
-      .update({ rtm_balance: newBalance })
-      .eq('id', user.id)
-
-    if (error) showToast('❌ ' + error.message)
-    else {
-      showToast(`✓ ${creditAmt} $RTM credited`)
-      setCreditId('')
-      setCreditAmt('')
-      setCreditReason('')
-      loadUsers(search)
+      if (!res.ok) {
+        showToast(`❌ ${result.error || 'Failed to credit user'}`)
+      } else {
+        showToast(`✓ ${creditAmt} $RTM credited`)
+        setCreditId('')
+        setCreditAmt('')
+        setCreditReason('')
+        loadUsers(search)
+      }
+    } catch (err) {
+      showToast('❌ Network connection error')
+    } finally {
+      setCrediting(false)
     }
-    setCrediting(false)
   }
 
   function formatHash(h: number): string {
