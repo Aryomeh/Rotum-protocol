@@ -3,7 +3,7 @@ import { useStore } from '@/store/useStore'
 import { supabase } from '@/lib/supabase'
 
 export default function PoolBanner() {
-  const { season, user, loadUserData, showToast } = useStore()
+  const { season, user, setUser, showToast } = useStore()
 
   const pool       = season ? Math.floor(season.pool_current) : 0
   const poolMax    = season ? season.pool_size : 10_000
@@ -18,15 +18,17 @@ export default function PoolBanner() {
   const handleActivate = async () => {
     if (!user?.id) return
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ mining_active: true })
-        .eq('id', user.id)
+      const res = await fetch('/api/mining/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      })
 
-      if (error) throw error
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Activation failed')
 
-      await loadUserData()
-      showToast('⚡ Mining Engine Activated!')
+      setUser(json.user)
+      showToast('⚡Engine Activated')
     } catch (err: any) {
       showToast('❌ Activation failed: ' + err.message)
     }
