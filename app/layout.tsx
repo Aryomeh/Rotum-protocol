@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import TonProvider from '@/components/TonProvider'
+import { ToastDisplay } from '@/components/ToastDisplay'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <TonProvider>
           {children}
         </TonProvider>
+        <ToastDisplay />
       </body>
     </html>
   )

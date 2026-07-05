@@ -1,17 +1,15 @@
 'use client'
 import { useStore } from '@/store/useStore'
-import { supabase } from '@/lib/supabase' // 🌟 Ensure this path points to your initialized supabase client
+import { supabase } from '@/lib/supabase'
 
 export default function PoolBanner() {
-  const { season, user, loadUserData, showToast } = useStore() as any 
-  // 🌟 Make sure user, loadUserData, and showToast are destructured if your store has them.
-  // If showToast/loadUserData live elsewhere, adjust or use standard console/alerts for now.
+  const { season, user, loadUserData, showToast } = useStore()
 
   const pool       = season ? Math.floor(season.pool_current) : 0
   const poolMax    = season ? season.pool_size : 10_000
-  
+
   const barPct     = poolMax > 0 ? Math.min(100, (pool / poolMax) * 100) : 0
-  
+
   const endsAt     = season ? new Date(season.ends_at) : null
   const daysLeft   = endsAt
     ? Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86_400_000))
@@ -26,11 +24,11 @@ export default function PoolBanner() {
         .eq('id', user.id)
 
       if (error) throw error
-      
-      if (typeof loadUserData === 'function') loadUserData()
-      if (typeof showToast === 'function') showToast('⚡ Mining Engine Activated!')
+
+      await loadUserData()
+      showToast('⚡ Mining Engine Activated!')
     } catch (err: any) {
-      if (typeof showToast === 'function') showToast('❌ Activation failed: ' + err.message)
+      showToast('❌ Activation failed: ' + err.message)
     }
   }
 
@@ -54,7 +52,7 @@ export default function PoolBanner() {
         style={{ fontSize: 26, color: 'var(--rtm-purple)', lineHeight: 1 }}
       >
         {pool.toLocaleString()}
-        <span 
+        <span
           style={{ fontSize: 14, color: 'var(--rtm-muted)', fontWeight: 'normal', marginLeft: '4px', marginRight: '4px' }}
         >
           /
@@ -77,9 +75,8 @@ export default function PoolBanner() {
         {daysLeft}d remaining · 248,142 operators competing
       </div>
 
-      {/* ⚡ INTERACTIVE ELEMENT: Check if mining_active switch is turned on */}
       {!user?.mining_active ? (
-        <button 
+        <button
           onClick={handleActivate}
           style={{
             width: '100%',
@@ -100,9 +97,7 @@ export default function PoolBanner() {
           ⚡ ACTIVATE MINING NODE
         </button>
       ) : (
-        /* If switch is true, hide button and show original design layout */
         <>
-          {/* Pool fill bar */}
           <div className="progress-track mt-2">
             <div
               className="progress-fill-green"

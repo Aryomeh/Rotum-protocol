@@ -21,6 +21,7 @@ export interface User {
   joined_at: string
   is_banned: boolean
   onboarded: boolean
+  mining_active: boolean
 }
 
 export interface Season {
@@ -64,7 +65,6 @@ export interface SeasonRanking {
   network_share: number
   est_reward: number
   updated_at: string
-  // joined from users
   telegram_name?: string
   telegram_username?: string
 }
@@ -126,7 +126,7 @@ export interface TelegramInitData {
   user?: TelegramUser
   chat_instance?: string
   chat_type?: string
-  start_param?: string  // referral code passed here
+  start_param?: string
   auth_date: number
   hash: string
 }
@@ -146,6 +146,7 @@ export interface AppStore {
   error: string | null
   isFirstTime: boolean
   nodeInstallProgress: number
+  toast: string | null
 
   setUser: (u: User) => void
   setSeason: (s: Season) => void
@@ -159,4 +160,6 @@ export interface AppStore {
   setError: (e: string | null) => void
   setFirstTime: (v: boolean) => void
   setNodeInstallProgress: (progress: number) => void
+  showToast: (message: string) => void
+  loadUserData: () => Promise<void>
 }
