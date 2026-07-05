@@ -13,6 +13,10 @@ interface Task {
   type:        string
   target:      number
   is_active:   boolean
+  image_url?:  string | null
+  gif_url?:    string | null
+  link_url?:   string | null
+  x_target?:   string | null
 }
 
 interface UserTask {
@@ -26,6 +30,8 @@ interface TaskWithStatus extends Task {
   progress:    number
   canClaim:    boolean
 }
+
+const X_PLACEHOLDER_TYPES = ['x_link', 'x_retweet', 'x_like']
 
 export default function Tasks() {
   const { user, setUser }         = useStore()
@@ -46,7 +52,7 @@ export default function Tasks() {
     setLoading(true)
 
     const [tasksRes, userTasksRes, referralsRes, nodesRes, purchasesRes, rankRes] = await Promise.all([
-      supabase.from('tasks').select('*').eq('is_active', true).order('id'),
+      supabase.from('tasks').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
       supabase.from('user_tasks').select('*').eq('user_id', user.id),
       supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', user.id),
       supabase.from('user_nodes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
@@ -83,7 +89,7 @@ export default function Tasks() {
             progress = userRank <= task.target ? task.target : 0
             canClaim = userRank <= task.target
             break
-          case 'daily':
+          case 'daily': {
             const lastActive = user.last_active_at ? new Date(user.last_active_at) : null
             const today      = new Date()
             const sameDay    = lastActive
@@ -92,8 +98,21 @@ export default function Tasks() {
             progress = sameDay ? 1 : 0
             canClaim = sameDay
             break
+          }
           case 'channel':
+            // Verified via VERIFY button -> /api/tasks/verify-channel
+            progress = 0
+            canClaim = false
+            break
           case 'manual':
+            // Announcement / visit-link tasks — self-claim, no auto verification
+            progress = 0
+            canClaim = true
+            break
+          case 'x_link':
+          case 'x_retweet':
+          case 'x_like':
+            // Not live yet — disabled until X API is wired up
             progress = 0
             canClaim = false
             break
@@ -137,8 +156,17 @@ export default function Tasks() {
     if (twa?.openTelegramLink) {
       twa.openTelegramLink('https://t.me/rotumprotocol')
     }
-    // After opening, allow manual claim
     showToast('Join the channel then tap VERIFY')
+  }
+
+  function handleViewLink(task: TaskWithStatus) {
+    if (!task.link_url) return
+    const twa = (window as any).Telegram?.WebApp
+    if (twa?.openLink) {
+      twa.openLink(task.link_url)
+    } else {
+      window.open(task.link_url, '_blank')
+    }
   }
 
   async function verifyChannel(task: TaskWithStatus) {
@@ -190,6 +218,7 @@ export default function Tasks() {
               claiming={claiming === task.id}
               onClaim={() => task.type === 'channel' ? verifyChannel(task) : claimTask(task)}
               onJoinChannel={() => handleChannelTask()}
+              onViewLink={() => handleViewLink(task)}
             />
           ))}
 
@@ -210,6 +239,7 @@ export default function Tasks() {
                   claiming={false}
                   onClaim={() => {}}
                   onJoinChannel={() => {}}
+                  onViewLink={() => {}}
                 />
               ))}
             </>
@@ -222,14 +252,17 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, claiming, onClaim, onJoinChannel }: {
+function TaskCard({ task, claiming, onClaim, onJoinChannel, onViewLink }: {
   task:          TaskWithStatus
   claiming:      boolean
   onClaim:       () => void
   onJoinChannel: () => void
+  onViewLink:    () => void
 }) {
   const showProgress = !task.completed && task.target > 1
   const pct          = showProgress ? Math.min(100, (task.progress / task.target) * 100) : 0
+  const isXPlaceholder = X_PLACEHOLDER_TYPES.includes(task.type)
+  const mediaUrl = task.gif_url || task.image_url
 
   return (
     <div style={{
@@ -239,6 +272,19 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel }: {
       padding:      '10px 12px',
       opacity:      task.completed ? 0.6 : 1,
     }}>
+      {/* Optional media (image/gif) for manual/announcement tasks */}
+      {mediaUrl && (
+        <img
+          src={mediaUrl}
+          alt={task.title}
+          style={{
+            width: '100%', maxHeight: 140, objectFit: 'cover',
+            borderRadius: 4, marginBottom: 8,
+            border: '1px solid var(--rtm-border)',
+          }}
+        />
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* Icon */}
         <div style={{
@@ -291,6 +337,14 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel }: {
             }}>
               DONE
             </span>
+          ) : isXPlaceholder ? (
+            <span style={{
+              fontFamily: "'Share Tech Mono'", fontSize: 9,
+              color: 'var(--rtm-muted)', background: '#080a0f',
+              border: '1px solid var(--rtm-border)', padding: '2px 7px', borderRadius: 2,
+            }}>
+              🔒 SOON
+            </span>
           ) : task.type === 'channel' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <button
@@ -313,6 +367,33 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel }: {
                 }}
               >
                 {claiming ? '...' : 'VERIFY'}
+              </button>
+            </div>
+          ) : task.type === 'manual' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {task.link_url && (
+                <button
+                  onClick={onViewLink}
+                  style={{
+                    background: '#0a1020', border: '1px solid #0088cc',
+                    color: '#00aaff', fontFamily: "'Share Tech Mono'",
+                    fontSize: 9, padding: '3px 8px', borderRadius: 2, cursor: 'pointer',
+                  }}
+                >
+                  VIEW
+                </button>
+              )}
+              <button
+                onClick={onClaim}
+                disabled={claiming}
+                style={{
+                  background: '#0a2a14', border: '1px solid var(--rtm-green)',
+                  color: 'var(--rtm-green)', fontFamily: "'Share Tech Mono'",
+                  fontSize: 10, padding: '4px 10px', borderRadius: 2,
+                  cursor: claiming ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {claiming ? '...' : 'CLAIM'}
               </button>
             </div>
           ) : task.canClaim ? (
