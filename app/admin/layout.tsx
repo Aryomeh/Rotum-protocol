@@ -10,6 +10,7 @@ const NAV = [
   { id: '/admin/pool',     label: '💰 Pool & Mining' },
   { id: '/admin/store',    label: '🛒 Power Store'   },
   { id: '/admin/events',   label: '⚡ Network Events' },
+  { id: '/admin/tasks',    label: '🎯 Tasks'         },
   { section: 'USERS' },
   { id: '/admin/users',    label: '👥 Operators' },
   { id: '/admin/rewards',  label: '🎁 Rewards'   },
