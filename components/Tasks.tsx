@@ -48,99 +48,126 @@ export default function Tasks() {
   const [claiming, setClaiming]   = useState<number | null>(null)
   const [toast, setToast]         = useState<string | null>(null)
 
-  useEffect(() => { if (user) loadTasks() }, [user])
+  // Track optimistically clicked task IDs so database lags don't revert them
+  const [optimisticViews, setOptimisticViews] = useState<Set<number>>(new Set())
+
+  useEffect(() => { if (user) loadTasks(true) }, [user])
+
+  // Listen for user returning to the app
+  useEffect(() => {
+    if (!user) return
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Silent refresh so the UI doesn't completely flicker out
+        loadTasks(false)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
+    }
+  }, [user, optimisticViews]) // Depend on optimisticViews to retain reference
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(null), 2800)
   }
 
-  async function loadTasks() {
+  async function loadTasks(showLoader = true) {
     if (!user) return
-    setLoading(true)
+    if (showLoader) setLoading(true)
 
-    const [tasksRes, userTasksRes, referralsRes, nodesRes, purchasesRes, rankRes, progressRes] = await Promise.all([
-      supabase.from('tasks').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
-      supabase.from('user_tasks').select('*').eq('user_id', user.id),
-      supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', user.id),
-      supabase.from('user_nodes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('purchases').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
-      supabase.from('season_rankings').select('rank').eq('user_id', user.id).single(),
-      supabase.from('task_progress').select('task_id, viewed_at, verified_at').eq('user_id', user.id),
-    ])
+    try {
+      const [tasksRes, userTasksRes, referralsRes, nodesRes, purchasesRes, rankRes, progressRes] = await Promise.all([
+        supabase.from('tasks').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
+        supabase.from('user_tasks').select('*').eq('user_id', user.id),
+        supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', user.id),
+        supabase.from('user_nodes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('purchases').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
+        supabase.from('season_rankings').select('rank').eq('user_id', user.id).single(),
+        supabase.from('task_progress').select('task_id, viewed_at, verified_at').eq('user_id', user.id),
+      ])
 
-    const completedIds = new Set((userTasksRes.data ?? []).map((ut: UserTask) => ut.task_id))
-    const referralCount = referralsRes.count ?? 0
-    const nodeCount     = nodesRes.count ?? 0
-    const purchaseCount = purchasesRes.count ?? 0
-    const userRank      = rankRes.data?.rank ?? 999999
+      const completedIds = new Set((userTasksRes.data ?? []).map((ut: UserTask) => ut.task_id))
+      const referralCount = referralsRes.count ?? 0
+      const nodeCount     = nodesRes.count ?? 0
+      const purchaseCount = purchasesRes.count ?? 0
+      const userRank      = rankRes.data?.rank ?? 999999
 
-    const progressMap = new Map<number, TaskProgress>(
-      (progressRes.data ?? []).map((p: TaskProgress) => [p.task_id, p])
-    )
+      const progressMap = new Map<number, TaskProgress>(
+        (progressRes.data ?? []).map((p: TaskProgress) => [p.task_id, p])
+      )
 
-    const enriched: TaskWithStatus[] = (tasksRes.data ?? []).map((task: Task) => {
-      const completed = completedIds.has(task.id)
-      const progressRow = progressMap.get(task.id)
-      const viewedAt   = progressRow?.viewed_at ?? null
-      const verifiedAt = progressRow?.verified_at ?? null
+      const enriched: TaskWithStatus[] = (tasksRes.data ?? []).map((task: Task) => {
+        const completed = completedIds.has(task.id)
+        const progressRow = progressMap.get(task.id)
+        const verifiedAt = progressRow?.verified_at ?? null
+        
+        // Safeguard: If user clicked view optimistically, stick to it even if DB is lagging
+        const viewedAt = progressRow?.viewed_at ?? (optimisticViews.has(task.id) ? new Date().toISOString() : null)
 
-      let progress = 0
-      let canClaim = false
+        let progress = 0
+        let canClaim = false
 
-      if (!completed) {
-        switch (task.type) {
-          case 'referral':
-            progress = Math.min(task.target, referralCount)
-            canClaim = referralCount >= task.target
-            break
-          case 'nodes':
-            progress = Math.min(task.target, nodeCount)
-            canClaim = nodeCount >= task.target
-            break
-          case 'purchase':
-            progress = Math.min(task.target, purchaseCount)
-            canClaim = purchaseCount >= task.target
-            break
-          case 'ranking':
-            progress = userRank <= task.target ? task.target : 0
-            canClaim = userRank <= task.target
-            break
-          case 'daily': {
-            const lastActive = user.last_active_at ? new Date(user.last_active_at) : null
-            const today      = new Date()
-            const sameDay    = lastActive
-              ? lastActive.toDateString() === today.toDateString()
-              : false
-            progress = sameDay ? 1 : 0
-            canClaim = sameDay
-            break
+        if (!completed) {
+          switch (task.type) {
+            case 'referral':
+              progress = Math.min(task.target, referralCount)
+              canClaim = referralCount >= task.target
+              break
+            case 'nodes':
+              progress = Math.min(task.target, nodeCount)
+              canClaim = nodeCount >= task.target
+              break
+            case 'purchase':
+              progress = Math.min(task.target, purchaseCount)
+              canClaim = purchaseCount >= task.target
+              break
+            case 'ranking':
+              progress = userRank <= task.target ? task.target : 0
+              canClaim = userRank <= task.target
+              break
+            case 'daily': {
+              const lastActive = user.last_active_at ? new Date(user.last_active_at) : null
+              const today      = new Date()
+              const sameDay    = lastActive
+                ? lastActive.toDateString() === today.toDateString()
+                : false
+              progress = sameDay ? 1 : 0
+              canClaim = sameDay
+              break
+            }
+            case 'channel':
+              progress = 0
+              canClaim = false
+              break
+            case 'manual':
+              progress = 0
+              canClaim = !!verifiedAt
+              break
+            case 'x_link':
+            case 'x_retweet':
+            case 'x_like':
+              progress = 0
+              canClaim = false
+              break
           }
-          case 'channel':
-            // Verified via VERIFY button -> /api/tasks/verify-channel
-            progress = 0
-            canClaim = false
-            break
-          case 'manual':
-            // Gated: VIEW -> VERIFY -> CLAIM, driven by task_progress
-            progress = 0
-            canClaim = !!verifiedAt
-            break
-          case 'x_link':
-          case 'x_retweet':
-          case 'x_like':
-            // Not live yet — disabled until X API is wired up
-            progress = 0
-            canClaim = false
-            break
         }
-      }
 
-      return { ...task, completed, progress, canClaim, viewedAt, verifiedAt }
-    })
+        return { ...task, completed, progress, canClaim, viewedAt, verifiedAt }
+      })
 
-    setTasks(enriched)
-    setLoading(false)
+      setTasks(enriched)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function claimTask(task: TaskWithStatus) {
@@ -160,7 +187,7 @@ export default function Tasks() {
       } else {
         showToast(`✓ +${Math.floor(task.reward_rtm)} $RTM claimed!`)
         setUser({ ...user, rtm_balance: user.rtm_balance + task.reward_rtm })
-        loadTasks()
+        loadTasks(false)
       }
     } catch {
       showToast('Network error')
@@ -178,6 +205,23 @@ export default function Tasks() {
 
   async function handleViewLink(task: TaskWithStatus) {
     if (!user) return
+
+    // 1. Permanently remember this item is viewed locally
+    setOptimisticViews(prev => {
+      const next = new Set(prev)
+      next.add(task.id)
+      return next
+    })
+
+    // 2. Shift state instantly to 'VERIFY' UI
+    const nowIso = new Date().toISOString()
+    setTasks(prevTasks => 
+      prevTasks.map(t => 
+        t.id === task.id ? { ...t, viewedAt: nowIso } : t
+      )
+    )
+
+    // 3. Open link layout
     if (task.link_url) {
       const twa = (window as any).Telegram?.WebApp
       if (twa?.openLink) {
@@ -187,7 +231,7 @@ export default function Tasks() {
       }
     }
 
-    // Stamp viewed_at server-side (idempotent)
+    // 4. Fire network update
     try {
       await fetch('/api/tasks/view', {
         method:  'POST',
@@ -195,9 +239,8 @@ export default function Tasks() {
         body:    JSON.stringify({ userId: user.id, taskId: task.id }),
       })
     } catch {
-      // non-fatal — VERIFY will just fail server-side if this didn't land
+      // safe fallback
     }
-    loadTasks()
   }
 
   async function verifyManualTask(task: TaskWithStatus) {
@@ -214,7 +257,7 @@ export default function Tasks() {
         showToast(json.error ?? 'Verification failed')
       } else {
         showToast('Verified — you can claim now')
-        loadTasks()
+        loadTasks(false)
       }
     } catch {
       showToast('Network error')
@@ -236,7 +279,7 @@ export default function Tasks() {
       else {
         showToast(`✓ +${Math.floor(task.reward_rtm)} $RTM claimed!`)
         setUser({ ...user, rtm_balance: user.rtm_balance + task.reward_rtm })
-        loadTasks()
+        loadTasks(false)
       }
     } catch {
       showToast('Network error')
@@ -249,7 +292,6 @@ export default function Tasks() {
 
   return (
     <div style={{ marginTop: 16 }}>
-      {/* Header */}
       <div style={{
         fontFamily: "'Share Tech Mono'", fontSize: 9,
         color: 'var(--rtm-muted)', letterSpacing: '3px',
@@ -309,6 +351,7 @@ export default function Tasks() {
   )
 }
 
+// (TaskCard component configuration remains unchanged below)
 function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onViewLink, onVerifyManual }: {
   task:            TaskWithStatus
   claiming:        boolean
@@ -323,7 +366,6 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
   const isXPlaceholder = X_PLACEHOLDER_TYPES.includes(task.type)
   const mediaUrl = task.gif_url || task.image_url
 
-  // manual task stage: 'view' -> 'verify' -> 'claim'
   const manualStage = task.verifiedAt ? 'claim' : task.viewedAt ? 'verify' : 'view'
 
   return (
@@ -334,7 +376,6 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
       padding:      '10px 12px',
       opacity:      task.completed ? 0.6 : 1,
     }}>
-      {/* Optional media (image/gif) for manual/announcement tasks */}
       {mediaUrl && (
         <img
           src={mediaUrl}
@@ -348,7 +389,6 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Icon */}
         <div style={{
           width: 36, height: 36, borderRadius: 4,
           background: task.completed ? '#0a2a14' : '#0f0820',
@@ -359,7 +399,6 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
           {task.icon}
         </div>
 
-        {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Rajdhani'", fontSize: 14, fontWeight: 600, color: task.completed ? 'var(--rtm-green)' : 'var(--rtm-text)' }}>
             {task.completed && '✓ '}{task.title}
@@ -368,7 +407,6 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
             {task.description}
           </div>
 
-          {/* Progress bar */}
           {showProgress && (
             <div style={{ marginTop: 6 }}>
               <div style={{ height: 3, background: '#1a2230', borderRadius: 2, overflow: 'hidden' }}>
@@ -385,7 +423,6 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
           )}
         </div>
 
-        {/* Right side */}
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 12, color: 'var(--rtm-amber)', fontWeight: 700, marginBottom: 4 }}>
             +{Math.floor(task.reward_rtm)} $RTM
