@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
-    // Get user
+    // Get user — now also selecting telegram_id, needed for the pool RPC below
     const { data: user, error: userErr } = await db
       .from('users')
       .select('*')
@@ -126,21 +126,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
 
-    // Credit RTM to user
-    const { error: updateErr } = await db
-      .from('users')
-      .update({
-        rtm_balance:      user.rtm_balance + task.reward_rtm,
-        rtm_earned_total: user.rtm_earned_total + task.reward_rtm,
-      })
-      .eq('id', userId)
+    // Deduct from the airdrop_tasks pool, credit user_balances.task_rewards,
+    // and sync users.rtm_balance — all atomically inside the RPC.
+    // This replaces the old direct `users.update({ rtm_balance: ... })` call,
+    // which paid users without ever touching tokenomics_supply.
+    const { error: rpcErr } = await db.rpc('process_task_reward', {
+      p_telegram_id: user.telegram_id,
+      p_amount: task.reward_rtm,
+    })
 
-    if (updateErr) {
-      return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    if (rpcErr) {
+      // Roll back the user_tasks row so the task isn't marked claimed
+      // if the pool payout failed (e.g. pool exhausted).
+      await db.from('user_tasks').delete().eq('user_id', userId).eq('task_id', taskId)
+      return NextResponse.json({ error: rpcErr.message }, { status: 400 })
     }
 
+    // rtm_earned_total is a lifetime-earnings counter, separate from the
+    // pool-backed rtm_balance — still updated directly here.
+    await db
+      .from('users')
+      .update({ rtm_earned_total: user.rtm_earned_total + task.reward_rtm })
+      .eq('id', userId)
+
     // Post to network feed
-    // Fixed: Removed invalid .catch() call from Supabase builder syntax
     try {
       await db.from('network_feed').insert({
         type:    'task',
