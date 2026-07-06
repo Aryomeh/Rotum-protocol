@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase.ts";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 const TOTAL_SUPPLY = 1_000_000;
 
