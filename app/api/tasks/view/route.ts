@@ -12,36 +12,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing userId or taskId' }, { status: 400 })
     }
 
-    const { data: progress } = await db
+    const { data: existing } = await db
       .from('task_progress')
-      .select('viewed_at, verified_at')
+      .select('viewed_at')
       .eq('user_id', userId)
       .eq('task_id', taskId)
       .single()
 
-    if (!progress?.viewed_at) {
-      return NextResponse.json({ error: 'View the task before verifying' }, { status: 400 })
-    }
-
-    if (progress.verified_at) {
-      return NextResponse.json({ success: true, verified_at: progress.verified_at })
+    if (existing?.viewed_at) {
+      // Already marked viewed — idempotent, just confirm
+      return NextResponse.json({ success: true, viewed_at: existing.viewed_at })
     }
 
     const now = new Date().toISOString()
 
     const { error } = await db
       .from('task_progress')
-      .update({ verified_at: now })
-      .eq('user_id', userId)
-      .eq('task_id', taskId)
+      .upsert(
+        { user_id: userId, task_id: taskId, viewed_at: now },
+        { onConflict: 'user_id,task_id' }
+      )
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, verified_at: now })
+    return NextResponse.json({ success: true, viewed_at: now })
   } catch (err: any) {
-    console.error('[tasks/verify]', err)
+    console.error('[tasks/view]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

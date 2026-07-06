@@ -94,11 +94,19 @@ export async function POST(req: NextRequest) {
         break
       }
       case 'channel':
-      case 'manual':
         // Channel verified separately via verify-channel route
-        // Manual tasks verified by admin
         verified = true
         break
+      case 'manual': {
+        const { data: progress } = await db
+          .from('task_progress')
+          .select('verified_at')
+          .eq('user_id', userId)
+          .eq('task_id', taskId)
+          .single()
+        verified = !!progress?.verified_at
+        break
+      }
       default:
         verified = false
     }

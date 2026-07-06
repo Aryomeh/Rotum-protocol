@@ -25,10 +25,18 @@ interface UserTask {
   reward_paid:  number
 }
 
+interface TaskProgress {
+  task_id:     number
+  viewed_at:   string | null
+  verified_at: string | null
+}
+
 interface TaskWithStatus extends Task {
-  completed:   boolean
-  progress:    number
-  canClaim:    boolean
+  completed:    boolean
+  progress:     number
+  canClaim:     boolean
+  viewedAt:     string | null
+  verifiedAt:   string | null
 }
 
 const X_PLACEHOLDER_TYPES = ['x_link', 'x_retweet', 'x_like']
@@ -51,13 +59,14 @@ export default function Tasks() {
     if (!user) return
     setLoading(true)
 
-    const [tasksRes, userTasksRes, referralsRes, nodesRes, purchasesRes, rankRes] = await Promise.all([
+    const [tasksRes, userTasksRes, referralsRes, nodesRes, purchasesRes, rankRes, progressRes] = await Promise.all([
       supabase.from('tasks').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
       supabase.from('user_tasks').select('*').eq('user_id', user.id),
       supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', user.id),
       supabase.from('user_nodes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('purchases').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
       supabase.from('season_rankings').select('rank').eq('user_id', user.id).single(),
+      supabase.from('task_progress').select('task_id, viewed_at, verified_at').eq('user_id', user.id),
     ])
 
     const completedIds = new Set((userTasksRes.data ?? []).map((ut: UserTask) => ut.task_id))
@@ -66,10 +75,18 @@ export default function Tasks() {
     const purchaseCount = purchasesRes.count ?? 0
     const userRank      = rankRes.data?.rank ?? 999999
 
+    const progressMap = new Map<number, TaskProgress>(
+      (progressRes.data ?? []).map((p: TaskProgress) => [p.task_id, p])
+    )
+
     const enriched: TaskWithStatus[] = (tasksRes.data ?? []).map((task: Task) => {
       const completed = completedIds.has(task.id)
-      let progress    = 0
-      let canClaim    = false
+      const progressRow = progressMap.get(task.id)
+      const viewedAt   = progressRow?.viewed_at ?? null
+      const verifiedAt = progressRow?.verified_at ?? null
+
+      let progress = 0
+      let canClaim = false
 
       if (!completed) {
         switch (task.type) {
@@ -105,9 +122,9 @@ export default function Tasks() {
             canClaim = false
             break
           case 'manual':
-            // Announcement / visit-link tasks — self-claim, no auto verification
+            // Gated: VIEW -> VERIFY -> CLAIM, driven by task_progress
             progress = 0
-            canClaim = true
+            canClaim = !!verifiedAt
             break
           case 'x_link':
           case 'x_retweet':
@@ -119,7 +136,7 @@ export default function Tasks() {
         }
       }
 
-      return { ...task, completed, progress, canClaim }
+      return { ...task, completed, progress, canClaim, viewedAt, verifiedAt }
     })
 
     setTasks(enriched)
@@ -159,14 +176,50 @@ export default function Tasks() {
     showToast('Join the channel then tap VERIFY')
   }
 
-  function handleViewLink(task: TaskWithStatus) {
-    if (!task.link_url) return
-    const twa = (window as any).Telegram?.WebApp
-    if (twa?.openLink) {
-      twa.openLink(task.link_url)
-    } else {
-      window.open(task.link_url, '_blank')
+  async function handleViewLink(task: TaskWithStatus) {
+    if (!user) return
+    if (task.link_url) {
+      const twa = (window as any).Telegram?.WebApp
+      if (twa?.openLink) {
+        twa.openLink(task.link_url)
+      } else {
+        window.open(task.link_url, '_blank')
+      }
     }
+
+    // Stamp viewed_at server-side (idempotent)
+    try {
+      await fetch('/api/tasks/view', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: user.id, taskId: task.id }),
+      })
+    } catch {
+      // non-fatal — VERIFY will just fail server-side if this didn't land
+    }
+    loadTasks()
+  }
+
+  async function verifyManualTask(task: TaskWithStatus) {
+    if (!user || claiming) return
+    setClaiming(task.id)
+    try {
+      const res  = await fetch('/api/tasks/verify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: user.id, taskId: task.id }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        showToast(json.error ?? 'Verification failed')
+      } else {
+        showToast('Verified — you can claim now')
+        loadTasks()
+      }
+    } catch {
+      showToast('Network error')
+    }
+    setClaiming(null)
   }
 
   async function verifyChannel(task: TaskWithStatus) {
@@ -216,9 +269,11 @@ export default function Tasks() {
               key={task.id}
               task={task}
               claiming={claiming === task.id}
-              onClaim={() => task.type === 'channel' ? verifyChannel(task) : claimTask(task)}
+              onClaim={() => claimTask(task)}
               onJoinChannel={() => handleChannelTask()}
+              onVerifyChannel={() => verifyChannel(task)}
               onViewLink={() => handleViewLink(task)}
+              onVerifyManual={() => verifyManualTask(task)}
             />
           ))}
 
@@ -239,7 +294,9 @@ export default function Tasks() {
                   claiming={false}
                   onClaim={() => {}}
                   onJoinChannel={() => {}}
+                  onVerifyChannel={() => {}}
                   onViewLink={() => {}}
+                  onVerifyManual={() => {}}
                 />
               ))}
             </>
@@ -252,17 +309,22 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, claiming, onClaim, onJoinChannel, onViewLink }: {
-  task:          TaskWithStatus
-  claiming:      boolean
-  onClaim:       () => void
-  onJoinChannel: () => void
-  onViewLink:    () => void
+function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onViewLink, onVerifyManual }: {
+  task:            TaskWithStatus
+  claiming:        boolean
+  onClaim:         () => void
+  onJoinChannel:   () => void
+  onVerifyChannel: () => void
+  onViewLink:      () => void
+  onVerifyManual:  () => void
 }) {
   const showProgress = !task.completed && task.target > 1
   const pct          = showProgress ? Math.min(100, (task.progress / task.target) * 100) : 0
   const isXPlaceholder = X_PLACEHOLDER_TYPES.includes(task.type)
   const mediaUrl = task.gif_url || task.image_url
+
+  // manual task stage: 'view' -> 'verify' -> 'claim'
+  const manualStage = task.verifiedAt ? 'claim' : task.viewedAt ? 'verify' : 'view'
 
   return (
     <div style={{
@@ -358,7 +420,7 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onViewLink }: {
                 JOIN
               </button>
               <button
-                onClick={onClaim}
+                onClick={onVerifyChannel}
                 disabled={claiming}
                 style={{
                   background: '#0f0820', border: '1px solid var(--rtm-accent)',
@@ -370,19 +432,31 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onViewLink }: {
               </button>
             </div>
           ) : task.type === 'manual' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {task.link_url && (
-                <button
-                  onClick={onViewLink}
-                  style={{
-                    background: '#0a1020', border: '1px solid #0088cc',
-                    color: '#00aaff', fontFamily: "'Share Tech Mono'",
-                    fontSize: 9, padding: '3px 8px', borderRadius: 2, cursor: 'pointer',
-                  }}
-                >
-                  VIEW
-                </button>
-              )}
+            manualStage === 'view' ? (
+              <button
+                onClick={onViewLink}
+                style={{
+                  background: '#0a1020', border: '1px solid #0088cc',
+                  color: '#00aaff', fontFamily: "'Share Tech Mono'",
+                  fontSize: 10, padding: '4px 10px', borderRadius: 2, cursor: 'pointer',
+                }}
+              >
+                VIEW
+              </button>
+            ) : manualStage === 'verify' ? (
+              <button
+                onClick={onVerifyManual}
+                disabled={claiming}
+                style={{
+                  background: '#0f0820', border: '1px solid var(--rtm-accent)',
+                  color: 'var(--rtm-purple)', fontFamily: "'Share Tech Mono'",
+                  fontSize: 10, padding: '4px 10px', borderRadius: 2,
+                  cursor: claiming ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {claiming ? '...' : 'VERIFY'}
+              </button>
+            ) : (
               <button
                 onClick={onClaim}
                 disabled={claiming}
@@ -395,7 +469,7 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onViewLink }: {
               >
                 {claiming ? '...' : 'CLAIM'}
               </button>
-            </div>
+            )
           ) : task.canClaim ? (
             <button
               onClick={onClaim}
