@@ -351,7 +351,6 @@ export default function Tasks() {
   )
 }
 
-// (TaskCard component configuration remains unchanged below)
 function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onViewLink, onVerifyManual }: {
   task:            TaskWithStatus
   claiming:        boolean
@@ -370,12 +369,29 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
 
   return (
     <div style={{
+      position:     'relative',
       background:   'var(--rtm-card)',
-      border:       `1px solid ${task.completed ? '#1a3a25' : 'var(--rtm-border)'}`,
+      border:       `1px solid ${task.completed ? '#7b5ea7' : 'var(--rtm-border)'}`,
       borderRadius: 6,
       padding:      '10px 12px',
-      opacity:      task.completed ? 0.6 : 1,
+      filter:       task.completed ? 'blur(0px)' : 'blur(1.5px)',
+      opacity:      task.completed ? 1 : 0.6,
+      transition:   'filter 0.4s ease, opacity 0.4s ease, border-color 0.4s ease',
     }}>
+      {/* Logo watermark — faint when locked, full strength once completed */}
+      <img
+        src="/icon.png"
+        alt=""
+        aria-hidden="true"
+        style={{
+          position: 'absolute', top: 8, right: 8,
+          width: 20, height: 20, objectFit: 'contain',
+          opacity: task.completed ? 0.9 : 0.25,
+          filter: task.completed ? 'none' : 'grayscale(1)',
+          transition: 'opacity 0.4s ease, filter 0.4s ease',
+        }}
+      />
+
       {mediaUrl && (
         <img
           src={mediaUrl}
@@ -391,8 +407,8 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 36, height: 36, borderRadius: 4,
-          background: task.completed ? '#0a2a14' : '#0f0820',
-          border: `1px solid ${task.completed ? '#1a4a25' : 'var(--rtm-border)'}`,
+          background: task.completed ? '#2a1a3a' : '#0f0820',
+          border: `1px solid ${task.completed ? '#7b5ea7' : 'var(--rtm-border)'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 18, flexShrink: 0,
         }}>
@@ -400,7 +416,7 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Rajdhani'", fontSize: 14, fontWeight: 600, color: task.completed ? 'var(--rtm-green)' : 'var(--rtm-text)' }}>
+          <div style={{ fontFamily: "'Rajdhani'", fontSize: 14, fontWeight: 600, color: task.completed ? '#f0e8ff' : 'var(--rtm-text)' }}>
             {task.completed && '✓ '}{task.title}
           </div>
           <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: 'var(--rtm-muted)', marginTop: 1 }}>
@@ -431,7 +447,7 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
           {task.completed ? (
             <span style={{
               fontFamily: "'Share Tech Mono'", fontSize: 9,
-              color: 'var(--rtm-green)', background: '#0a2a14',
+              color: '#00e5a0', background: '#0a2a14',
               border: '1px solid #1a4a25', padding: '2px 7px', borderRadius: 2,
             }}>
               DONE
