@@ -44,23 +44,24 @@ export function useUser() {
           return // Exit early, don't load dashboard data
         }
 
-        // 4. Load everything in parallel (only for existing/onboarded users)
-        const [seasonRes, upgradesRes, nodesRes, rankingsRes] = await Promise.all([
-          supabase
-            .from('seasons')
-            .select('*')
-            .eq('status', 'active')
-            .single(),
+        // 4. Get the real active season first — everything else depends on its id
+        const seasonRes = await supabase
+          .from('seasons')
+          .select('*')
+          .eq('status', 'active')
+          .single()
 
+        if (seasonRes.data) setSeason(seasonRes.data)
+        const activeSeasonId = seasonRes.data?.id ?? 1
+
+        // 5. Load the rest in parallel now that we know the real season id
+        const [upgradesRes, nodesRes, rankingsRes] = await Promise.all([
           supabase
             .from('upgrade_catalogue')
             .select('*')
             .order('sort_order'),
 
-          supabase
-            .from('user_nodes')
-            .select('*')
-            .eq('user_id', user.id),
+          fetch(`/api/user/nodes?userId=${user.id}`).then(r => r.json()),
 
           supabase
             .from('season_rankings')
@@ -68,14 +69,13 @@ export function useUser() {
               *,
               users ( telegram_name, telegram_username )
             `)
-            .eq('season_id', parseInt(process.env.NEXT_PUBLIC_SEASON_ID || '1'))
+            .eq('season_id', activeSeasonId)
             .order('rank', { ascending: true })
             .limit(100),
         ])
 
-        if (seasonRes.data)   setSeason(seasonRes.data)
         if (upgradesRes.data) setUpgrades(upgradesRes.data)
-        if (nodesRes.data)    setUserNodes(nodesRes.data)
+        if (nodesRes.success) setUserNodes(nodesRes.nodes)
 
         if (rankingsRes.data) {
           // Flatten the joined user fields

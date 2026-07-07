@@ -374,9 +374,8 @@ function TaskCard({ task, claiming, onClaim, onJoinChannel, onVerifyChannel, onV
       border:       `1px solid ${task.completed ? '#7b5ea7' : 'var(--rtm-border)'}`,
       borderRadius: 6,
       padding:      '10px 12px',
-      filter:       task.completed ? 'blur(0px)' : 'blur(1.5px)',
-      opacity:      task.completed ? 1 : 0.6,
-      transition:   'filter 0.4s ease, opacity 0.4s ease, border-color 0.4s ease',
+      opacity:      1,
+      transition:   'border-color 0.4s ease',
     }}>
       {/* Logo watermark — faint when locked, full strength once completed */}
       <img

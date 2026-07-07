@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { NODE_TON_PRICES, STORE_TON_PRICES } from '@/lib/ton-prices' // 👈 CHANGED THIS IMPORT LINE
+import { NODE_TON_PRICES, STORE_TON_PRICES } from '@/lib/ton-prices'
 
 export async function POST(req: Request) {
   try {
@@ -29,17 +29,18 @@ export async function POST(req: Request) {
 
       const orderId = crypto.randomUUID()
 
-      // 3. Register the intent as pending in the 'purchases' ledger inside Supabase
-    const { error } = await getSupabaseAdmin()  // 👈 was: supabase
+      // Register the intent as pending in the 'purchases' ledger inside Supabase
+      const { error } = await getSupabaseAdmin()
         .from('purchases')
         .insert({
             id: orderId,
             user_id: userId,
             item_slug: slug,
-            item_name: slug.replace('_', ' ').toUpperCase(), // 👈 Added this to fulfill 'item_name' requirement
-            amount_ton: tonPrice, // 👈 This matches your custom numeric column perfectly now
+            item_name: slug.replace('_', ' ').toUpperCase(),
+            amount_ton: tonPrice,
+            source: 'ton', // 👈 FIX: Explicitly set source to 'ton' instead of relying on DB default
             status: 'pending',
-            purchased_at: new Date().toISOString() // 👈 CHANGED THIS FROM 'created_at' TO MATCH YOUR SCHEMA
+            purchased_at: new Date().toISOString()
         })
 
       if (error) {
