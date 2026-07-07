@@ -56,8 +56,6 @@ const btn = (color: string, bg: string, border: string): React.CSSProperties => 
   letterSpacing: '1px', marginTop: 8,
 })
 
-const AIRDROP_RESERVE = 2_000_000 // 60% of 10M supply
-
 // ── Tab toggle styling ──────────────────────────────────────
 const tabBar: React.CSSProperties = {
   display: 'flex', gap: 6, marginBottom: 16,
@@ -77,7 +75,9 @@ export default function AdminPool() {
   const [loading, setLoading]       = useState(true)
   const [saving, setSaving]         = useState(false)
   const [toast, setToast]           = useState('')
-  const [totalSpent, setTotalSpent] = useState(0)
+  const [poolReserve, setPoolReserve]         = useState(0)
+  const [poolDistributed, setPoolDistributed] = useState(0)
+  const [poolRemaining, setPoolRemaining]     = useState(0)
 
   // Form state
   const [name, setName]         = useState('')
@@ -116,12 +116,26 @@ export default function AdminPool() {
       setPoolCurrent('0')
     }
 
-    const { data: allSeasons } = await supabase
-      .from('seasons')
-      .select('pool_size')
-    if (allSeasons) {
-      const spent = allSeasons.reduce((sum, s) => sum + (s.pool_size ?? 0), 0)
-      setTotalSpent(spent)
+    if (latest) {
+      try {
+        const res = await fetch('/api/stats/live-pools', { cache: 'no-store' })
+        if (res.ok) {
+          const json = await res.json()
+          const key = `season_${latest.id}_pool`
+          const poolRow = json.pools?.find((p: any) => p.key === key)
+          if (poolRow) {
+            setPoolReserve(poolRow.allocated)
+            setPoolDistributed(poolRow.distributed)
+            setPoolRemaining(poolRow.remaining)
+          } else {
+            setPoolReserve(0); setPoolDistributed(0); setPoolRemaining(0)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load live pool stats for season', err)
+      }
+    } else {
+      setPoolReserve(0); setPoolDistributed(0); setPoolRemaining(0)
     }
 
     setLoading(false)
@@ -226,19 +240,19 @@ export default function AdminPool() {
             <div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', letterSpacing: '1px', marginBottom: 4 }}>TOTAL AIRDROP RESERVE</div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#f0a500', fontWeight: 700 }}>
-                {AIRDROP_RESERVE.toLocaleString()} $RTM
+                {poolReserve.toLocaleString()} $RTM
               </div>
             </div>
             <div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', letterSpacing: '1px', marginBottom: 4 }}>ALLOCATED TO SEASONS</div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#ff4455', fontWeight: 700 }}>
-                {totalSpent.toLocaleString()} $RTM
+                {poolDistributed.toLocaleString()} $RTM
               </div>
             </div>
             <div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', letterSpacing: '1px', marginBottom: 4 }}>REMAINING BALANCE</div>
               <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#00e5a0', fontWeight: 700 }}>
-                {(AIRDROP_RESERVE - totalSpent).toLocaleString()} $RTM
+                {poolRemaining.toLocaleString()} $RTM
               </div>
             </div>
           </div>
