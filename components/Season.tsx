@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import Tasks from './Tasks'
+import Achievements from './Achievements'
 import { showRewardedAd } from '@/lib/ads'
 import { AD_UNLOCK_REQUIREMENTS } from '@/lib/adConfig'
 
@@ -20,7 +21,7 @@ const REWARD_TIERS = [
   { tier: '⚡ RANDOM ACTIVE', operators: 'varies', share: '10%', avg: 'varies'      },
 ]
 
-const TABS = ['SEASON', 'STORE', 'TASKS'] as const
+const TABS = ['SEASON', 'STORE', 'TASKS', 'ACHIEVEMENTS'] as const
 type Tab = typeof TABS[number]
 
 function useCountdown(endsAt: string | null) {
@@ -292,6 +293,9 @@ export default function Season() {
 
       {/* TASKS TAB */}
       {activeTab === 'TASKS' && <Tasks />}
+
+      {/* ACHIEVEMENTS TAB */}
+      {activeTab === 'ACHIEVEMENTS' && <Achievements />}
 
       {toast && <div className="toast">{toast}</div>}
     </div>
