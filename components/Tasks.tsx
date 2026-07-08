@@ -50,7 +50,7 @@ export default function Tasks() {
 
   // Track optimistically clicked task IDs so database lags don't revert them
   const [optimisticViews, setOptimisticViews] = useState<Set<number>>(new Set())
-
+  const [optimisticVerifies, setOptimisticVerifies] = useState<Set<number>>(new Set())
   useEffect(() => { if (user) loadTasks(true) }, [user])
 
   // Listen for user returning to the app
@@ -106,7 +106,7 @@ export default function Tasks() {
       const enriched: TaskWithStatus[] = (tasksRes.data ?? []).map((task: Task) => {
         const completed = completedIds.has(task.id)
         const progressRow = progressMap.get(task.id)
-        const verifiedAt = progressRow?.verified_at ?? null
+        const verifiedAt = progressRow?.verified_at ?? (optimisticVerifies.has(task.id) ? new Date().toISOString() : null)
         
         // Safeguard: If user clicked view optimistically, stick to it even if DB is lagging
         const viewedAt = progressRow?.viewed_at ?? (optimisticViews.has(task.id) ? new Date().toISOString() : null)
