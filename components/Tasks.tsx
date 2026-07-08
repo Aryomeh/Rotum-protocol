@@ -83,21 +83,62 @@ export default function Tasks() {
     if (showLoader) setLoading(true)
 
     try {
-      const [tasksRes, userTasksRes, referralsRes, nodesRes, purchasesRes, rankRes, progressRes] = await Promise.all([
-        supabase.from('tasks').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
-        supabase.from('user_tasks').select('*').eq('user_id', user.id),
-        supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', user.id),
-        supabase.from('user_nodes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('purchases').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
-        supabase.from('season_rankings').select('rank').eq('user_id', user.id).single(),
-        supabase.from('task_progress').select('task_id, viewed_at, verified_at').eq('user_id', user.id),
+      const [
+        tasksRes,
+        userTasksRes,
+        referralsRes,
+        nodesRes,
+        purchasesRes,
+        rankRes,
+        progressRes,
+      ] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true }),
+
+        supabase
+          .from('user_tasks')
+          .select('*')
+          .eq('user_id', user.id),
+
+        supabase
+          .from('referrals')
+          .select('id', { count: 'exact', head: true })
+          .eq('referrer_id', user.id),
+
+        supabase
+          .from('user_nodes')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+
+        supabase
+          .from('purchases')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('status', 'completed'),
+
+        supabase
+          .from('season_rankings')
+          .select('rank')
+          .eq('user_id', user.id)
+          .single(),
+
+        supabase
+          .from('task_progress')
+          .select('task_id, viewed_at, verified_at')
+          .eq('user_id', user.id),
       ])
 
-      const completedIds = new Set((userTasksRes.data ?? []).map((ut: UserTask) => ut.task_id))
+      const completedIds = new Set(
+        (userTasksRes.data ?? []).map((ut: UserTask) => ut.task_id)
+      )
+
       const referralCount = referralsRes.count ?? 0
-      const nodeCount     = nodesRes.count ?? 0
+      const nodeCount = nodesRes.count ?? 0
       const purchaseCount = purchasesRes.count ?? 0
-      const userRank      = rankRes.data?.rank ?? 999999
+      const userRank = rankRes.data?.rank ?? 999999
 
       const progressMap = new Map<number, TaskProgress>(
         (progressRes.data ?? []).map((p: TaskProgress) => [p.task_id, p])
@@ -106,10 +147,15 @@ export default function Tasks() {
       const enriched: TaskWithStatus[] = (tasksRes.data ?? []).map((task: Task) => {
         const completed = completedIds.has(task.id)
         const progressRow = progressMap.get(task.id)
-        const verifiedAt = progressRow?.verified_at ?? (optimisticVerifies.has(task.id) ? new Date().toISOString() : null)
-        
-        // Safeguard: If user clicked view optimistically, stick to it even if DB is lagging
-        const viewedAt = progressRow?.viewed_at ?? (optimisticViews.has(task.id) ? new Date().toISOString() : null)
+
+        // Preserve optimistic state while waiting for Supabase
+        const viewedAt =
+          progressRow?.viewed_at ??
+          (optimisticViews.has(task.id) ? '__optimistic__' : null)
+
+        const verifiedAt =
+          progressRow?.verified_at ??
+          (optimisticVerifies.has(task.id) ? '__optimistic__' : null)
 
         let progress = 0
         let canClaim = false
@@ -120,36 +166,48 @@ export default function Tasks() {
               progress = Math.min(task.target, referralCount)
               canClaim = referralCount >= task.target
               break
+
             case 'nodes':
               progress = Math.min(task.target, nodeCount)
               canClaim = nodeCount >= task.target
               break
+
             case 'purchase':
               progress = Math.min(task.target, purchaseCount)
               canClaim = purchaseCount >= task.target
               break
+
             case 'ranking':
               progress = userRank <= task.target ? task.target : 0
               canClaim = userRank <= task.target
               break
+
             case 'daily': {
-              const lastActive = user.last_active_at ? new Date(user.last_active_at) : null
-              const today      = new Date()
-              const sameDay    = lastActive
+              const lastActive = user.last_active_at
+                ? new Date(user.last_active_at)
+                : null
+
+              const today = new Date()
+
+              const sameDay = lastActive
                 ? lastActive.toDateString() === today.toDateString()
                 : false
+
               progress = sameDay ? 1 : 0
               canClaim = sameDay
               break
             }
-            case 'channel':
-              progress = 0
-              canClaim = false
-              break
+
             case 'manual':
               progress = 0
               canClaim = !!verifiedAt
               break
+
+            case 'channel':
+              progress = 0
+              canClaim = false
+              break
+
             case 'x_link':
             case 'x_retweet':
             case 'x_like':
@@ -159,10 +217,34 @@ export default function Tasks() {
           }
         }
 
-        return { ...task, completed, progress, canClaim, viewedAt, verifiedAt }
+        return {
+          ...task,
+          completed,
+          progress,
+          canClaim,
+          viewedAt,
+          verifiedAt,
+        }
       })
 
-      setTasks(enriched)
+      // Preserve optimistic UI while server catches up
+      setTasks(prev => {
+        const prevMap = new Map(prev.map(t => [t.id, t]))
+
+        return enriched.map(task => {
+          const existing = prevMap.get(task.id)
+
+          if (!existing) return task
+
+          return {
+            ...task,
+            completed: existing.completed || task.completed,
+            viewedAt: existing.viewedAt || task.viewedAt,
+            verifiedAt: existing.verifiedAt || task.verifiedAt,
+            canClaim: existing.canClaim || task.canClaim,
+          }
+        })
+      })
     } catch (e) {
       console.error(e)
     } finally {
@@ -172,27 +254,57 @@ export default function Tasks() {
 
   async function claimTask(task: TaskWithStatus) {
     if (!user || claiming) return
+
     setClaiming(task.id)
 
     try {
-      const res  = await fetch('/api/tasks/claim', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.id, taskId: task.id }),
+      const res = await fetch('/api/tasks/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          taskId: task.id,
+        }),
       })
+
       const json = await res.json()
 
       if (!json.success) {
         showToast(json.error ?? 'Failed to claim')
-      } else {
-        showToast(`✓ +${Math.floor(task.reward_rtm)} $RTM claimed!`)
-        setUser({ ...user, rtm_balance: user.rtm_balance + task.reward_rtm })
-        loadTasks(false)
+        return
       }
-    } catch {
+
+      // Update balance immediately
+      setUser({
+        ...user,
+        rtm_balance: user.rtm_balance + task.reward_rtm,
+      })
+
+      // Instantly move task to DONE
+      setTasks(prev =>
+        prev.map(t =>
+          t.id === task.id
+            ? {
+                ...t,
+                completed: true,
+                canClaim: false,
+              }
+            : t
+        )
+      )
+
+      showToast(`✓ +${Math.floor(task.reward_rtm)} $RTM claimed!`)
+
+      // Refresh silently in the background
+      loadTasks(false)
+    } catch (err) {
+      console.error(err)
       showToast('Network error')
+    } finally {
+      setClaiming(null)
     }
-    setClaiming(null)
   }
 
   async function handleChannelTask() {
@@ -206,71 +318,110 @@ export default function Tasks() {
   async function handleViewLink(task: TaskWithStatus) {
     if (!user) return
 
-    // 1. Permanently remember this item is viewed locally
+    // Instantly remember locally
     setOptimisticViews(prev => {
       const next = new Set(prev)
       next.add(task.id)
       return next
     })
 
-    // 2. Shift state instantly to 'VERIFY' UI
     const nowIso = new Date().toISOString()
-    setTasks(prevTasks => 
-      prevTasks.map(t => 
-        t.id === task.id ? { ...t, viewedAt: nowIso } : t
+
+    // Instantly change VIEW -> VERIFY
+    setTasks(prev =>
+      prev.map(t =>
+        t.id === task.id
+          ? { ...t, viewedAt: nowIso }
+          : t
       )
     )
 
-    // 3. Open link layout
-    if (task.link_url) {
-      const twa = (window as any).Telegram?.WebApp
-      if (twa?.openLink) {
-        twa.openLink(task.link_url)
-      } else {
-        window.open(task.link_url, '_blank')
-      }
-    }
-
-    // 4. Fire network update
     try {
-      await fetch('/api/tasks/view', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.id, taskId: task.id }),
+      // Save to database BEFORE opening Telegram
+      const res = await fetch('/api/tasks/view', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          taskId: task.id,
+        }),
       })
-    } catch {
-      // safe fallback
+
+      if (!res.ok) {
+        throw new Error('Failed to save task view')
+      }
+
+      // Open the task
+      if (task.link_url) {
+        const twa = (window as any).Telegram?.WebApp
+
+        if (twa?.openLink) {
+          twa.openLink(task.link_url)
+        } else {
+          window.open(task.link_url, '_blank')
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to open task')
     }
   }
 
   async function verifyManualTask(task: TaskWithStatus) {
     if (!user || claiming) return
+
     setClaiming(task.id)
+
     try {
       const res = await fetch('/api/tasks/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, taskId: task.id }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          taskId: task.id,
+        }),
       })
+
       const json = await res.json()
+
       if (!json.success) {
         showToast(json.error ?? 'Verification failed')
-      } else {
-        const nowIso = new Date().toISOString()
-
-        // 1. Force the UI button to change to CLAIM instantly
-        setTasks(prevTasks =>
-          prevTasks.map(t =>
-            t.id === task.id ? { ...t, verifiedAt: nowIso, canClaim: true } : t
-          )
-        )
-
-        showToast('Verified — you can claim now')
+        return
       }
-    } catch {
+
+      const nowIso = new Date().toISOString()
+
+      // Remember verification locally so loadTasks() can't overwrite it
+      setOptimisticVerifies(prev => {
+        const next = new Set(prev)
+        next.add(task.id)
+        return next
+      })
+
+      // Instantly change VERIFY -> CLAIM
+      setTasks(prev =>
+        prev.map(t =>
+          t.id === task.id
+            ? {
+                ...t,
+                verifiedAt: nowIso,
+                canClaim: true,
+              }
+            : t
+        )
+      )
+
+      showToast('Verified — you can claim now')
+    } catch (err) {
+      console.error(err)
       showToast('Network error')
+    } finally {
+      setClaiming(null)
     }
-    setClaiming(null)
   }
 
   async function verifyChannel(task: TaskWithStatus) {
