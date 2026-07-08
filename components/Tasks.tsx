@@ -247,17 +247,25 @@ export default function Tasks() {
     if (!user || claiming) return
     setClaiming(task.id)
     try {
-      const res  = await fetch('/api/tasks/verify', {
-        method:  'POST',
+      const res = await fetch('/api/tasks/verify', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.id, taskId: task.id }),
+        body: JSON.stringify({ userId: user.id, taskId: task.id }),
       })
       const json = await res.json()
       if (!json.success) {
         showToast(json.error ?? 'Verification failed')
       } else {
+        const nowIso = new Date().toISOString()
+
+        // 1. Force the UI button to change to CLAIM instantly
+        setTasks(prevTasks =>
+          prevTasks.map(t =>
+            t.id === task.id ? { ...t, verifiedAt: nowIso, canClaim: true } : t
+          )
+        )
+
         showToast('Verified — you can claim now')
-        loadTasks(false)
       }
     } catch {
       showToast('Network error')
