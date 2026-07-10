@@ -126,7 +126,7 @@ export default function Season() {
     }
   }
 
-  const pool    = season ? Math.floor(season.pool_current) : 102_450
+  const pool    = season ? Math.floor(season.pool_size) : 102_450
   const poolMax = season ? season.pool_size : 100_000
   const barPct  = Math.min(100, (pool / poolMax) * 100)
 
