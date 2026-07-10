@@ -40,7 +40,7 @@ export async function POST() {
   const { error: resetError } = await supabase
     .from('users')
     .update({ mining_active: false })
-    .neq('id', 0) // matches all rows; Supabase requires a filter on update
+    .not('id', 'is', null) // matches all rows; Supabase requires a filter on update
 
   if (resetError)
     return NextResponse.json(
