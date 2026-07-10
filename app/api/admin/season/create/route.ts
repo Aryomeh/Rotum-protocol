@@ -4,6 +4,20 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 export async function POST() {
   const supabase = getSupabaseAdmin()
 
+  // End any currently-active season(s) before creating a new one.
+  // This prevents multiple rows with status = 'active' from ever
+  // existing at once, which breaks any query using .single().
+  const { error: endError } = await supabase
+    .from('seasons')
+    .update({ status: 'ended' })
+    .eq('status', 'active')
+
+  if (endError)
+    return NextResponse.json(
+      { success: false, error: endError.message },
+      { status: 500 }
+    )
+
   const { data: last } = await supabase
     .from('seasons')
     .select('id')
@@ -65,10 +79,20 @@ export async function POST() {
     console.error('[season/create] failed to look up tokenomics_supply bucket:', bucketFetchError.message)
   } else if (!bucket) {
     // No pre-defined bucket exists for this season number yet.
-    // This is expected for season 3+ if you haven't added a row for
-    // it in tokenomics_supply — the season is still created, but its
-    // reserve won't show on the live supply page until you add one.
-    console.warn(`[season/create] no tokenomics_supply row found for "${bucketKey}" — season created without a reserved supply bucket.`)
+    // Auto-create it now so the live supply page and admin
+    // "Remaining Balance" don't show 0 for this season.
+    const { error: insertBucketError } = await supabase
+      .from('tokenomics_supply')
+      .insert({
+        allocation_name: bucketKey,
+        total_allocated: 100000, // default per-season reserve — adjust as needed
+        amount_distributed: 0,
+        amount_remaining: 100000,
+      })
+
+    if (insertBucketError) {
+      console.error('[season/create] failed to auto-create tokenomics_supply bucket:', insertBucketError.message)
+    }
   } else {
     const { error: bucketUpdateError } = await supabase
       .from('tokenomics_supply')
