@@ -142,7 +142,7 @@ function TopBar({ onProfileClick }: { onProfileClick: () => void }) {
         <span className="pulse-dot" />
         POOL:&nbsp;
         <span style={{ color: 'var(--rtm-green)' }}>
-          {season ? Math.floor(season.pool_current).toLocaleString() : '—'} $RTM
+          {season ? Math.floor(season.pool_size).toLocaleString() : '—'} $RTM
         </span>
       </div>
     </div>
