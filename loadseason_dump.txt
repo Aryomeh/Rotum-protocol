@@ -1,0 +1,155 @@
+﻿
+> app\admin\pool\page.tsx:93:  useEffect(() => { loadSeason() }, [])
+  app\admin\pool\page.tsx:94:
+> app\admin\pool\page.tsx:95:  async function loadSeason() {
+  app\admin\pool\page.tsx:96:    setLoading(true)
+  app\admin\pool\page.tsx:97:    const { data } = await supabase
+  app\admin\pool\page.tsx:98:      .from('seasons')
+  app\admin\pool\page.tsx:99:      .select('*')
+  app\admin\pool\page.tsx:100:      .order('id', { ascending: false })
+  app\admin\pool\page.tsx:101:      .limit(1)
+  app\admin\pool\page.tsx:102:
+  app\admin\pool\page.tsx:103:    const latest = data?.[0] ?? null
+  app\admin\pool\page.tsx:104:    setSeason(latest)
+  app\admin\pool\page.tsx:105:    if (latest) {
+  app\admin\pool\page.tsx:106:      setName(latest.name)
+  app\admin\pool\page.tsx:107:      setStatus(latest.status)
+  app\admin\pool\page.tsx:108:      setEndsAt(latest.ends_at?.split('T')[0] ?? '')
+  app\admin\pool\page.tsx:109:      setPoolSize(latest.pool_size.toString())
+  app\admin\pool\page.tsx:110:      setPoolCurrent(latest.pool_current.toString())
+  app\admin\pool\page.tsx:111:    } else {
+  app\admin\pool\page.tsx:112:      setName('')
+  app\admin\pool\page.tsx:113:      setStatus('active')
+  app\admin\pool\page.tsx:114:      setEndsAt('')
+  app\admin\pool\page.tsx:115:      setPoolSize('10000')
+  app\admin\pool\page.tsx:116:      setPoolCurrent('0')
+  app\admin\pool\page.tsx:117:    }
+  app\admin\pool\page.tsx:118:
+  app\admin\pool\page.tsx:119:    if (latest) {
+  app\admin\pool\page.tsx:120:      try {
+  app\admin\pool\page.tsx:121:        const res = await fetch('/api/stats/live-pools', { cache: 'no-store' })
+  app\admin\pool\page.tsx:122:        if (res.ok) {
+  app\admin\pool\page.tsx:123:          const json = await res.json()
+  app\admin\pool\page.tsx:124:          const key = `season_${latest.id}_pool`
+  app\admin\pool\page.tsx:125:          const poolRow = json.pools?.find((p: any) => p.key === key)
+  app\admin\pool\page.tsx:126:          if (poolRow) {
+  app\admin\pool\page.tsx:127:            setPoolReserve(poolRow.allocated)
+  app\admin\pool\page.tsx:128:            setPoolDistributed(poolRow.distributed)
+  app\admin\pool\page.tsx:129:            setPoolRemaining(poolRow.remaining)
+  app\admin\pool\page.tsx:130:          } else {
+  app\admin\pool\page.tsx:131:            setPoolReserve(0); setPoolDistributed(0); setPoolRemaining(0)
+  app\admin\pool\page.tsx:132:          }
+  app\admin\pool\page.tsx:133:        }
+  app\admin\pool\page.tsx:134:      } catch (err) {
+  app\admin\pool\page.tsx:135:        console.error('Failed to load live pool stats for season', err)
+  app\admin\pool\page.tsx:136:      }
+  app\admin\pool\page.tsx:137:    } else {
+  app\admin\pool\page.tsx:138:      setPoolReserve(0); setPoolDistributed(0); setPoolRemaining(0)
+  app\admin\pool\page.tsx:139:    }
+  app\admin\pool\page.tsx:140:
+  app\admin\pool\page.tsx:141:    setLoading(false)
+  app\admin\pool\page.tsx:142:  }
+  app\admin\pool\page.tsx:143:
+  app\admin\pool\page.tsx:144:  function showToast(msg: string) {
+  app\admin\pool\page.tsx:145:    setToast(msg)
+> app\admin\pool\page.tsx:166:    else { showToast('✓ Pool saved'); loadSeason() }
+  app\admin\pool\page.tsx:167:    setSaving(false)
+  app\admin\pool\page.tsx:168:  }
+  app\admin\pool\page.tsx:169:
+  app\admin\pool\page.tsx:170:  async function endSeason() {
+  app\admin\pool\page.tsx:171:    if (!season) return
+  app\admin\pool\page.tsx:172:    if (!confirm('End season early and queue reward distribution?')) return
+  app\admin\pool\page.tsx:173:    setSaving(true)
+  app\admin\pool\page.tsx:174:    const res = await fetch('/api/admin/season/end', {
+  app\admin\pool\page.tsx:175:      method: 'POST',
+  app\admin\pool\page.tsx:176:      headers: { 'Content-Type': 'application/json' },
+  app\admin\pool\page.tsx:177:      body: JSON.stringify({ id: season.id }),
+  app\admin\pool\page.tsx:178:    })
+  app\admin\pool\page.tsx:179:    const json = await res.json()
+  app\admin\pool\page.tsx:180:    if (!json.success) showToast('❌ Error: ' + json.error)
+  app\admin\pool\page.tsx:181:    else showToast('✓ Season ended — go to Rewards to distribute')
+  app\admin\pool\page.tsx:182:    setSaving(false)
+> app\admin\pool\page.tsx:183:    loadSeason()
+  app\admin\pool\page.tsx:184:  }
+  app\admin\pool\page.tsx:185:
+  app\admin\pool\page.tsx:186:  async function resetPool() {
+  app\admin\pool\page.tsx:187:    if (!season) return
+  app\admin\pool\page.tsx:188:    if (!confirm('Reset pool_current and pool_size to 0 for this season?')) return
+  app\admin\pool\page.tsx:189:    setSaving(true)
+  app\admin\pool\page.tsx:190:    const res = await fetch('/api/admin/season/reset-pool', {
+  app\admin\pool\page.tsx:191:      method: 'POST',
+  app\admin\pool\page.tsx:192:      headers: { 'Content-Type': 'application/json' },
+  app\admin\pool\page.tsx:193:      body: JSON.stringify({ id: season.id }),
+  app\admin\pool\page.tsx:194:    })
+  app\admin\pool\page.tsx:195:    const json = await res.json()
+  app\admin\pool\page.tsx:196:    if (!json.success) showToast('❌ Error: ' + json.error)
+> app\admin\pool\page.tsx:197:    else { showToast('✓ Pool reset to 0'); loadSeason() }
+  app\admin\pool\page.tsx:198:    setSaving(false)
+  app\admin\pool\page.tsx:199:  }
+  app\admin\pool\page.tsx:200:
+  app\admin\pool\page.tsx:201:  async function createNewSeason() {
+  app\admin\pool\page.tsx:202:    if (!confirm('Create a new season? Current season must be ended first.')) return
+  app\admin\pool\page.tsx:203:    setSaving(true)
+  app\admin\pool\page.tsx:204:    const res = await fetch('/api/admin/season/create', { method: 'POST' })
+  app\admin\pool\page.tsx:205:    const json = await res.json()
+  app\admin\pool\page.tsx:206:    if (!json.success) showToast('❌ Error: ' + json.error)
+> app\admin\pool\page.tsx:207:    else { showToast('✓ New season created'); loadSeason() }
+  app\admin\pool\page.tsx:208:    setSaving(false)
+  app\admin\pool\page.tsx:209:  }
+  app\admin\pool\page.tsx:210:
+  app\admin\pool\page.tsx:211:  const totalPct = parseInt(top10) + parseInt(top100) + parseInt(top1000) + parseInt(random)
+  app\admin\pool\page.tsx:212:  const pctOk    = totalPct === 100
+  app\admin\pool\page.tsx:213:
+  app\admin\pool\page.tsx:214:  if (loading) return (
+  app\admin\pool\page.tsx:215:    <div style={{ fontFamily: "'Share Tech Mono'", color: '#4a5a70', fontSize: 11 }}>
+  app\admin\pool\page.tsx:216:      LOADING...
+  app\admin\pool\page.tsx:217:    </div>
+  app\admin\pool\page.tsx:218:  )
+  app\admin\pool\page.tsx:219:
+  app\admin\pool\page.tsx:220:  return (
+  app\admin\pool\page.tsx:221:    <div>
+  app\admin\pool\page.tsx:222:      <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 11, color: '#4a5a70', letterSpacing: 
+'3px', marginBottom: 16 }}>
+  app\admin\pool\page.tsx:223:        💰 POOL MANAGEMENT
+  app\admin\pool\page.tsx:224:      </div>
+  app\admin\pool\page.tsx:225:
+  app\admin\pool\page.tsx:226:      {/* Tab toggle */}
+  app\admin\pool\page.tsx:227:      <div style={tabBar}>
+  app\admin\pool\page.tsx:228:        <div style={tabBtn(tab === 'season')} onClick={() => setTab('season')}>SEASON POOL</div>
+  app\admin\pool\page.tsx:229:        <div style={tabBtn(tab === 'supply')} onClick={() => setTab('supply')}>TOKEN SUPPLY</div>
+  app\admin\pool\page.tsx:230:      </div>
+  app\admin\pool\page.tsx:231:
+  app\admin\pool\page.tsx:232:      {tab === 'season' ? (
+  app\admin\pool\page.tsx:233:        <>
+  app\admin\pool\page.tsx:234:          {/* Airdrop Reserve Banner */}
+  app\admin\pool\page.tsx:235:          <div style={{
+  app\admin\pool\page.tsx:236:            background: '#0a0d14', border: '1px solid #1a2230',
+  app\admin\pool\page.tsx:237:            borderRadius: 6, padding: '12px 14px', marginBottom: 12,
+  app\admin\pool\page.tsx:238:            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12,
+  app\admin\pool\page.tsx:239:          }}>
+  app\admin\pool\page.tsx:240:            <div>
+  app\admin\pool\page.tsx:241:              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', 
+letterSpacing: '1px', marginBottom: 4 }}>TOTAL AIRDROP RESERVE</div>
+  app\admin\pool\page.tsx:242:              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#f0a500', 
+fontWeight: 700 }}>
+  app\admin\pool\page.tsx:243:                {poolReserve.toLocaleString()} $RTM
+  app\admin\pool\page.tsx:244:              </div>
+  app\admin\pool\page.tsx:245:            </div>
+  app\admin\pool\page.tsx:246:            <div>
+  app\admin\pool\page.tsx:247:              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', 
+letterSpacing: '1px', marginBottom: 4 }}>ALLOCATED TO SEASONS</div>
+  app\admin\pool\page.tsx:248:              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#ff4455', 
+fontWeight: 700 }}>
+  app\admin\pool\page.tsx:249:                {poolDistributed.toLocaleString()} $RTM
+  app\admin\pool\page.tsx:250:              </div>
+  app\admin\pool\page.tsx:251:            </div>
+  app\admin\pool\page.tsx:252:            <div>
+  app\admin\pool\page.tsx:253:              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 9, color: '#4a5a70', 
+letterSpacing: '1px', marginBottom: 4 }}>REMAINING BALANCE</div>
+  app\admin\pool\page.tsx:254:              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: 13, color: '#00e5a0', 
+fontWeight: 700 }}>
+  app\admin\pool\page.tsx:255:                {poolRemaining.toLocaleString()} $RTM
+  app\admin\pool\page.tsx:256:              </div>
+  app\admin\pool\page.tsx:257:            </div>
+
+

@@ -68,6 +68,8 @@ const tabBtn = (active: boolean): React.CSSProperties => ({
   color: active ? '#9d7fd4' : '#4a5a70',
 })
 
+const SEASON_OPTIONS = ['Season 1', 'Season 2'] as const
+
 export default function AdminPool() {
   const [tab, setTab] = useState<'season' | 'supply'>('season')
 
@@ -80,48 +82,44 @@ export default function AdminPool() {
   const [poolRemaining, setPoolRemaining]     = useState(0)
 
   // Form state
-  const [name, setName]         = useState('')
+  const [name, setName]         = useState<typeof SEASON_OPTIONS[number]>('Season 1')
   const [status, setStatus]     = useState('active')
   const [endsAt, setEndsAt]     = useState('')
   const [poolSize, setPoolSize] = useState('10000')
-  const [poolCurrent, setPoolCurrent] = useState('0')
   const [top10, setTop10]       = useState('40')
   const [top100, setTop100]     = useState('30')
   const [top1000, setTop1000]   = useState('20')
   const [random, setRandom]     = useState('10')
 
-  useEffect(() => { loadSeason() }, [])
+  useEffect(() => { loadSeason('Season 1') }, [])
 
-  async function loadSeason() {
+  async function loadSeason(targetName: typeof SEASON_OPTIONS[number]) {
     setLoading(true)
     const { data } = await supabase
       .from('seasons')
       .select('*')
-      .order('id', { ascending: false })
-      .limit(1)
+      .eq('name', targetName)
+      .maybeSingle()
 
-    const latest = data?.[0] ?? null
-    setSeason(latest)
-    if (latest) {
-      setName(latest.name)
-      setStatus(latest.status)
-      setEndsAt(latest.ends_at?.split('T')[0] ?? '')
-      setPoolSize(latest.pool_size.toString())
-      setPoolCurrent(latest.pool_current.toString())
+    setSeason(data ?? null)
+    setName(targetName)
+
+    if (data) {
+      setStatus(data.status)
+      setEndsAt(data.ends_at?.split('T')[0] ?? '')
+      setPoolSize(data.pool_size.toString())
     } else {
-      setName('')
       setStatus('active')
       setEndsAt('')
       setPoolSize('10000')
-      setPoolCurrent('0')
     }
 
-    if (latest) {
+    if (data) {
       try {
         const res = await fetch('/api/stats/live-pools', { cache: 'no-store' })
         if (res.ok) {
           const json = await res.json()
-          const key = `season_${latest.id}_pool`
+          const key = targetName === 'Season 2' ? 'season_2_pool' : 'season_1_pool'
           const poolRow = json.pools?.find((p: any) => p.key === key)
           if (poolRow) {
             setPoolReserve(poolRow.allocated)
@@ -158,12 +156,11 @@ export default function AdminPool() {
         status,
         ends_at: new Date(endsAt).toISOString(),
         pool_size: Number(poolSize),
-        pool_current: Number(poolCurrent),
       }),
     })
     const json = await res.json()
     if (!json.success) showToast('❌ Error: ' + json.error)
-    else { showToast('✓ Pool saved'); loadSeason() }
+    else { showToast('✓ Pool saved'); loadSeason(name) }
     setSaving(false)
   }
 
@@ -180,7 +177,7 @@ export default function AdminPool() {
     if (!json.success) showToast('❌ Error: ' + json.error)
     else showToast('✓ Season ended — go to Rewards to distribute')
     setSaving(false)
-    loadSeason()
+    loadSeason(name)
   }
 
   async function resetPool() {
@@ -194,17 +191,7 @@ export default function AdminPool() {
     })
     const json = await res.json()
     if (!json.success) showToast('❌ Error: ' + json.error)
-    else { showToast('✓ Pool reset to 0'); loadSeason() }
-    setSaving(false)
-  }
-
-  async function createNewSeason() {
-    if (!confirm('Create a new season? Current season must be ended first.')) return
-    setSaving(true)
-    const res = await fetch('/api/admin/season/create', { method: 'POST' })
-    const json = await res.json()
-    if (!json.success) showToast('❌ Error: ' + json.error)
-    else { showToast('✓ New season created'); loadSeason() }
+    else { showToast('✓ Pool reset to 0'); loadSeason(name) }
     setSaving(false)
   }
 
@@ -276,8 +263,16 @@ export default function AdminPool() {
               </div>
               <div style={panelBody}>
                 <div style={{ marginBottom: 12 }}>
-                  <label style={lbl}>SEASON NAME</label>
-                  <input style={inp} value={name} onChange={e => setName(e.target.value)} />
+                  <label style={lbl}>SEASON</label>
+                  <select
+                    style={inp}
+                    value={name}
+                    onChange={e => loadSeason(e.target.value as typeof SEASON_OPTIONS[number])}
+                  >
+                    {SEASON_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ marginBottom: 12 }}>
                   <label style={lbl}>STATUS</label>
@@ -309,20 +304,7 @@ export default function AdminPool() {
                       />
                     </div>
 
-                    <div style={{ marginBottom: 8 }}>
-                      <label style={{ ...lbl, marginBottom: 3 }}>SET CURRENT POOL ($RTM)</label>
-                      <input
-                        style={inp}
-                        type="number"
-                        value={poolCurrent}
-                        onChange={e => setPoolCurrent(e.target.value)}
-                      />
-                    </div>
-
-                    <div>Current: <span style={{ color: '#00e5a0' }}>{Math.floor(season?.pool_current ?? 0).toLocaleString()} $RTM</span></div>
-                    <div>Filled: <span style={{ color: '#9d7fd4' }}>
-                      {season && season.pool_size > 0 ? ((season.pool_current / season.pool_size) * 100).toFixed(1) : 0}%
-                    </span></div>
+                    <div>Live pool: <span style={{ color: '#00e5a0' }}>{Math.floor(season?.pool_current ?? 0).toLocaleString()} $RTM</span></div>
                   </div>
                 </div>
 
@@ -335,9 +317,6 @@ export default function AdminPool() {
                 </button>
                 <button style={{ ...btn('#ff4455', '#1a0810', '#ff4455'), marginTop: 6 }} disabled={saving} onClick={endSeason}>
                   END SEASON EARLY
-                </button>
-                <button style={{ ...btn('#00e5a0', '#0a1a10', '#00e5a0'), marginTop: 6 }} disabled={saving} onClick={createNewSeason}>
-                  + CREATE NEW SEASON
                 </button>
               </div>
             </div>
