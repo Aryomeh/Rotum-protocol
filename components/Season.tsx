@@ -1,303 +1,132 @@
-'use client'
-import { useState, useEffect } from 'react'
-import { useStore } from '@/store/useStore'
-import Tasks from './Tasks'
-import Achievements from './Achievements'
-import { showRewardedAd } from '@/lib/ads'
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { SHOP_ITEMS, applyPurchaseEffect } from '@/lib/shopEffects'
 import { AD_UNLOCK_REQUIREMENTS } from '@/lib/adConfig'
 
-const SHOP_ITEMS = [
-  { slug: 'hash_boost_24h',   icon: '⚡', name: 'Hash Boost (24h)',  desc: '2× your hash rate for 24 hours',   stars: 25  },
-  { slug: 'mining_crate',     icon: '📦', name: 'Mining Crate',      desc: 'Random node upgrade or $RTM bonus', stars: 50  },
-  { slug: 'accelerator_pack', icon: '🚀', name: 'Accelerator Pack',  desc: 'Permanent +10% hash rate boost',    stars: 100 },
-  { slug: 'validator_slot',   icon: '🔮', name: 'Validator Slot',    desc: 'Unlock the Validator Node tier',    stars: 200 },
-  { slug: 'quantum_upgrade',  icon: '⚛️', name: 'Quantum Upgrade',   desc: 'Unlock the Quantum Processor tier', stars: 500 },
-]
+export const runtime = 'edge'
 
-const REWARD_TIERS = [
-  { tier: '🥇 TOP 10',        operators: '10',     share: '40%', avg: '4,098 $RTM' },
-  { tier: '🥈 TOP 100',       operators: '90',     share: '30%', avg: '342 $RTM'   },
-  { tier: '🥉 TOP 1,000',     operators: '900',    share: '20%', avg: '23 $RTM'    },
-  { tier: '⚡ RANDOM ACTIVE', operators: 'varies', share: '10%', avg: 'varies'      },
-]
-
-const TABS = ['SEASON', 'STORE', 'TASKS', 'ACHIEVEMENTS'] as const
-type Tab = typeof TABS[number]
-
-function useCountdown(endsAt: string | null) {
-  const [remaining, setRemaining] = useState('')
-  useEffect(() => {
-    if (!endsAt) return
-    function tick() {
-      const diff = Math.max(0, new Date(endsAt!).getTime() - Date.now())
-      const d = Math.floor(diff / 86_400_000)
-      const h = Math.floor((diff % 86_400_000) / 3_600_000)
-      const m = Math.floor((diff % 3_600_000) / 60_000)
-      const s = Math.floor((diff % 60_000) / 1_000)
-      setRemaining(`${d}d ${h}h ${m}m ${String(s).padStart(2, '0')}s`)
-    }
-    tick()
-    const id = setInterval(tick, 1_000)
-    return () => clearInterval(id)
-  }, [endsAt])
-  return remaining
+function nextUtcMidnight(from: Date): string {
+  return new Date(Date.UTC(
+    from.getUTCFullYear(),
+    from.getUTCMonth(),
+    from.getUTCDate() + 1,
+    0, 0, 0
+  )).toISOString()
 }
 
-export default function Season() {
-  const { season, user }        = useStore()
-  const [activeTab, setTab]     = useState<Tab>('SEASON')
-  const [buying, setBuying]     = useState<string | null>(null)
-  const [toast, setToast]       = useState<string | null>(null)
-  const [adProgress, setAdProgress] = useState<Record<string, number>>({})
-  const [watchingAd, setWatchingAd] = useState<string | null>(null)
-  const countdown = useCountdown(season?.ends_at ?? null)
+function isSameUtcDay(a: Date, b: Date): boolean {
+  return a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10)
+}
 
-  useEffect(() => {
-    if (!user) return
-    fetch(`/api/watch-ad?userId=${user.id}`)
-      .then(res => res.json())
-      .then(data => { if (data.success) setAdProgress(data.progress) })
-      .catch(() => {})
-  }, [user])
+// GET /api/watch-ad?userId=xxx
+// Returns how many ads the user has watched toward each ad-eligible item,
+// plus a lockedUntil timestamp for any item completed earlier today (UTC).
+export async function GET(req: NextRequest) {
+  const userId = req.nextUrl.searchParams.get('userId')
+  if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3000)
-  }
+  const db = getSupabaseAdmin()
+  const { data, error } = await db
+    .from('ad_progress')
+    .select('item_slug, watched_count, last_completed_at')
+    .eq('user_id', userId)
 
-  async function handleWatchAd(slug: string) {
-    if (!user || watchingAd || buying) return
-    setWatchingAd(slug)
-    try {
-      await showRewardedAd()
-      const res = await fetch('/api/watch-ad', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.id, itemSlug: slug }),
-      })
-      const data = await res.json()
-      if (!data.success) {
-        showToast(data.error || 'Could not record ad view')
-        return
-      }
-      setAdProgress(prev => ({ ...prev, [slug]: data.watched }))
-      if (data.completed) {
-        showToast('🎉 Reward unlocked — item applied!')
-      } else {
-        showToast(`Ad watched! ${data.watched}/${data.required}`)
-      }
-    } catch {
-      showToast('Ad not available — try again shortly')
-    } finally {
-      setWatchingAd(null)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const progress: Record<string, number> = {}
+  const lockedUntil: Record<string, string> = {}
+  const now = new Date()
+
+  for (const row of data ?? []) {
+    progress[row.item_slug] = row.watched_count
+    if (row.last_completed_at && isSameUtcDay(new Date(row.last_completed_at), now)) {
+      lockedUntil[row.item_slug] = nextUtcMidnight(now)
     }
   }
 
-  async function handleBuy(slug: string, stars: number) {
-    if (!user || buying) return
-    setBuying(slug)
-    try {
-      const twa = (window as any).Telegram?.WebApp
-      const res = await fetch('/api/invoice', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.id, itemSlug: slug, telegramId: user.telegram_id }),
-      })
-      const data = await res.json()
-      if (!data.success || !data.invoiceLink) {
-        showToast('Failed to create invoice')
-        setBuying(null)
-        return
-      }
-      if (twa?.openInvoice) {
-        twa.openInvoice(data.invoiceLink, (status: string) => {
-          if (status === 'paid')      showToast('Payment successful! Item applied.')
-          else if (status === 'cancelled') showToast('Payment cancelled')
-          else if (status === 'failed')    showToast('Payment failed — try again')
-          setBuying(null)
-        })
-      } else {
-        window.open(data.invoiceLink, '_blank')
-        setBuying(null)
-      }
-    } catch {
-      showToast('Network error — try again')
-      setBuying(null)
+  return NextResponse.json({ success: true, progress, lockedUntil })
+}
+
+// POST /api/watch-ad  { userId, itemSlug }
+// Called after the client confirms a rewarded ad finished playing.
+// Blocks further progress if the item was already completed earlier
+// today (UTC) — it can't be re-farmed until the next UTC day.
+export async function POST(req: NextRequest) {
+  try {
+    const rawBody = await req.text()
+    const { userId, itemSlug } = JSON.parse(rawBody)
+
+    const required = AD_UNLOCK_REQUIREMENTS[itemSlug]
+    const item     = SHOP_ITEMS[itemSlug]
+    if (!required || !item) {
+      return NextResponse.json({ error: 'Item is not unlockable via ads' }, { status: 400 })
     }
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+    }
+
+    const db = getSupabaseAdmin()
+
+    const { data: existing } = await db
+      .from('ad_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('item_slug', itemSlug)
+      .single()
+
+    // Already completed today (UTC) — locked until midnight.
+    if (existing?.last_completed_at) {
+      const now = new Date()
+      if (isSameUtcDay(new Date(existing.last_completed_at), now)) {
+        return NextResponse.json({
+          error: 'Already completed today — resets at 00:00 UTC',
+          lockedUntil: nextUtcMidnight(now),
+        }, { status: 429 })
+      }
+    }
+
+    const watched = (existing?.watched_count ?? 0) + 1
+
+    // Not enough ad views yet — just record progress.
+    if (watched < required) {
+      if (existing) {
+        await db.from('ad_progress').update({ watched_count: watched, updated_at: new Date().toISOString() }).eq('id', existing.id)
+      } else {
+        await db.from('ad_progress').insert({ user_id: userId, item_slug: itemSlug, watched_count: watched })
+      }
+      return NextResponse.json({ success: true, completed: false, watched, required })
+    }
+
+    // Required ad count reached — grant the reward, same as a Stars purchase but at price 0.
+    const { data: purchase, error: purchaseErr } = await db.from('purchases').insert({
+      user_id: userId, item_slug: itemSlug, item_name: item.name,
+      price_stars: 0, status: 'completed', applied: false,
+    }).select().single()
+    if (purchaseErr) throw purchaseErr
+
+    await applyPurchaseEffect(userId, item.effect, purchase.id)
+
+    const completedAt = new Date().toISOString()
+    if (existing) {
+      await db.from('ad_progress').update({
+        watched_count: 0,
+        last_completed_at: completedAt,
+        updated_at: completedAt,
+      }).eq('id', existing.id)
+    } else {
+      await db.from('ad_progress').insert({
+        user_id: userId, item_slug: itemSlug, watched_count: 0, last_completed_at: completedAt,
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      completed: true,
+      watched: 0,
+      required,
+      lockedUntil: nextUtcMidnight(new Date()),
+    })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  const pool    = season ? Math.floor(season.pool_size) : 102_450
-  const poolMax = season ? season.pool_size : 100_000
-  const barPct  = Math.min(100, (pool / poolMax) * 100)
-
-  return (
-    <div className="animate-page px-3 pt-3">
-
-      {/* Sub tabs */}
-      <div style={{
-        display:        'flex',
-        background:     'var(--rtm-surface)',
-        border:         '1px solid var(--rtm-border)',
-        borderRadius:   6,
-        marginBottom:   12,
-        overflow:       'hidden',
-      }}>
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setTab(tab)}
-            style={{
-              flex:        1,
-              padding:     '8px 4px',
-              fontFamily:  "'Share Tech Mono'",
-              fontSize:    11,
-              letterSpacing: '1px',
-              background:  'none',
-              border:      'none',
-              borderBottom: activeTab === tab
-                ? '2px solid var(--rtm-purple)'
-                : '2px solid transparent',
-              color:       activeTab === tab ? 'var(--rtm-purple)' : 'var(--rtm-muted)',
-              cursor:      'pointer',
-              transition:  'all .15s',
-            }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* SEASON TAB */}
-      {activeTab === 'SEASON' && (
-        <>
-          {/* Hero */}
-          <div className="rounded-md p-4 mb-3 text-center" style={{
-            background: 'linear-gradient(135deg, #0d0820, #120d28)',
-            border:     '1px solid #2a1a50',
-          }}>
-            <div className="font-mono mb-1" style={{ fontSize: 9, color: 'var(--rtm-muted)', letterSpacing: '3px' }}>
-              SEASON 01 · $RTM GENESIS EPOCH
-            </div>
-            <div className="font-head font-bold glow-purple" style={{ fontSize: 26, color: 'var(--rtm-purple)' }}>
-              ROTUM PROTOCOL
-            </div>
-            <div className="font-mono mt-1" style={{ fontSize: 10, color: 'var(--rtm-muted)' }}>
-              Compete globally. Earn $RTM. Dominate the network.
-            </div>
-            <div className="font-mono font-bold mt-3" style={{ fontSize: 24, color: 'var(--rtm-green)' }}>
-              {pool.toLocaleString()}
-              <span style={{ fontSize: 13, color: 'var(--rtm-accent)', marginLeft: 4 }}>$RTM</span>
-            </div>
-            <div className="progress-track mt-2 mx-4">
-              <div className="progress-fill-green" style={{ width: `${barPct}%` }} />
-            </div>
-            <div className="font-mono mt-2" style={{ fontSize: 12, color: 'var(--rtm-amber)' }}>
-              ENDS IN: {countdown || '—'}
-            </div>
-          </div>
-
-          {/* Reward tiers */}
-          <div className="section-label">$RTM REWARD DISTRIBUTION</div>
-          <div className="rtm-card mb-3 overflow-hidden" style={{ borderTop: '2px solid var(--rtm-amber)' }}>
-            <div className="grid font-mono px-3 py-1.5" style={{
-              gridTemplateColumns: '2fr 1fr 1fr 1.5fr',
-              fontSize: 9, color: 'var(--rtm-muted)', letterSpacing: '1px',
-              borderBottom: '1px solid var(--rtm-border)',
-            }}>
-              <span>TIER</span><span>OPS</span><span>SHARE</span><span className="text-right">AVG REWARD</span>
-            </div>
-            {REWARD_TIERS.map(row => (
-              <div key={row.tier} className="grid font-mono px-3 py-2" style={{
-                gridTemplateColumns: '2fr 1fr 1fr 1.5fr',
-                fontSize: 11, color: 'var(--rtm-text)',
-                borderBottom: '1px solid var(--rtm-border)',
-              }}>
-                <span>{row.tier}</span>
-                <span style={{ color: 'var(--rtm-muted)' }}>{row.operators}</span>
-                <span style={{ color: 'var(--rtm-green)' }}>{row.share}</span>
-                <span className="text-right" style={{ color: 'var(--rtm-amber)' }}>{row.avg}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* STORE TAB */}
-      {activeTab === 'STORE' && (
-        <>
-          <div className="section-label">$RTM POWER STORE</div>
-          <div className="flex flex-col gap-2 mb-4">
-            {SHOP_ITEMS.map(item => {
-              const isBuying = buying === item.slug
-              const adsRequired = AD_UNLOCK_REQUIREMENTS[item.slug]
-              const isWatchingAd = watchingAd === item.slug
-              const watched = adProgress[item.slug] ?? 0
-              return (
-                <div key={item.slug} className="rtm-card flex items-center gap-3 px-3 py-2.5">
-                  <div className="text-xl flex-shrink-0 w-8 text-center">{item.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-head font-semibold" style={{ fontSize: 13, color: 'var(--rtm-text)' }}>
-                      {item.name}
-                    </div>
-                    <div className="font-mono mt-0.5" style={{ fontSize: 9, color: 'var(--rtm-muted)' }}>
-                      {item.desc}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
-                    <button
-                      onClick={() => handleBuy(item.slug, item.stars)}
-                      disabled={isBuying || isWatchingAd || !user}
-                      style={{
-                        background:   isBuying ? '#0a0d14' : '#0a1a10',
-                        border:       `1px solid ${isBuying ? 'var(--rtm-border)' : 'var(--rtm-green)'}`,
-                        color:        isBuying ? 'var(--rtm-muted)' : 'var(--rtm-green)',
-                        fontFamily:   "'Share Tech Mono', monospace",
-                        fontSize:     11,
-                        padding:      '5px 10px',
-                        borderRadius: 3,
-                        cursor:       isBuying || isWatchingAd || !user ? 'not-allowed' : 'pointer',
-                        transition:   'all .2s',
-                        whiteSpace:   'nowrap',
-                      }}
-                    >
-                      {isBuying ? '...' : `⭐ ${item.stars}`}
-                    </button>
-
-                    {adsRequired && (
-                      <button
-                        onClick={() => handleWatchAd(item.slug)}
-                        disabled={isBuying || isWatchingAd || !user}
-                        style={{
-                          background:   isWatchingAd ? '#0a0d14' : '#150c22',
-                          border:       `1px solid ${isWatchingAd ? 'var(--rtm-border)' : 'var(--rtm-purple)'}`,
-                          color:        isWatchingAd ? 'var(--rtm-muted)' : 'var(--rtm-purple)',
-                          fontFamily:   "'Share Tech Mono', monospace",
-                          fontSize:     10,
-                          padding:      '4px 10px',
-                          borderRadius: 3,
-                          cursor:       isBuying || isWatchingAd || !user ? 'not-allowed' : 'pointer',
-                          transition:   'all .2s',
-                          whiteSpace:   'nowrap',
-                        }}
-                      >
-                        {isWatchingAd ? '⏳ LOADING...' : `▶ ${watched}/${adsRequired} ADS`}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-
-      {/* TASKS TAB */}
-      {activeTab === 'TASKS' && <Tasks />}
-
-      {/* ACHIEVEMENTS TAB */}
-      {activeTab === 'ACHIEVEMENTS' && <Achievements />}
-
-      {toast && <div className="toast">{toast}</div>}
-    </div>
-  )
 }
