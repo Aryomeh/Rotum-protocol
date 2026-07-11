@@ -5,36 +5,55 @@ import { AD_UNLOCK_REQUIREMENTS } from '@/lib/adConfig'
 
 export const runtime = 'edge'
 
+function nextUtcMidnight(from: Date): string {
+  return new Date(Date.UTC(
+    from.getUTCFullYear(),
+    from.getUTCMonth(),
+    from.getUTCDate() + 1,
+    0, 0, 0
+  )).toISOString()
+}
+
+function isSameUtcDay(a: Date, b: Date): boolean {
+  return a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10)
+}
+
 // GET /api/watch-ad?userId=xxx
-// Returns how many ads the user has already watched toward each ad-eligible item.
+// Returns how many ads the user has watched toward each ad-eligible item,
+// plus a lockedUntil timestamp for any item completed earlier today (UTC).
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get('userId')
-  console.log('[watch-ad GET] userId param:', userId)
   if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
   const db = getSupabaseAdmin()
   const { data, error } = await db
     .from('ad_progress')
-    .select('item_slug, watched_count')
+    .select('item_slug, watched_count, last_completed_at')
     .eq('user_id', userId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const progress: Record<string, number> = {}
-  for (const row of data ?? []) progress[row.item_slug] = row.watched_count
+  const lockedUntil: Record<string, string> = {}
+  const now = new Date()
 
-  return NextResponse.json({ success: true, progress })
+  for (const row of data ?? []) {
+    progress[row.item_slug] = row.watched_count
+    if (row.last_completed_at && isSameUtcDay(new Date(row.last_completed_at), now)) {
+      lockedUntil[row.item_slug] = nextUtcMidnight(now)
+    }
+  }
+
+  return NextResponse.json({ success: true, progress, lockedUntil })
 }
 
 // POST /api/watch-ad  { userId, itemSlug }
 // Called after the client confirms a rewarded ad finished playing.
-// Increments the user's ad count for that item; once it hits the required
-// count, grants the item's effect (same effect logic used for Star purchases)
-// and resets the counter.
+// Blocks further progress if the item was already completed earlier
+// today (UTC) — it can't be re-farmed until the next UTC day.
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
-    console.log('[watch-ad POST] raw body:', rawBody)
     const { userId, itemSlug } = JSON.parse(rawBody)
 
     const required = AD_UNLOCK_REQUIREMENTS[itemSlug]
@@ -54,6 +73,17 @@ export async function POST(req: NextRequest) {
       .eq('user_id', userId)
       .eq('item_slug', itemSlug)
       .single()
+
+    // Already completed today (UTC) — locked until midnight.
+    if (existing?.last_completed_at) {
+      const now = new Date()
+      if (isSameUtcDay(new Date(existing.last_completed_at), now)) {
+        return NextResponse.json({
+          error: 'Already completed today — resets at 00:00 UTC',
+          lockedUntil: nextUtcMidnight(now),
+        }, { status: 429 })
+      }
+    }
 
     const watched = (existing?.watched_count ?? 0) + 1
 
@@ -76,13 +106,26 @@ export async function POST(req: NextRequest) {
 
     await applyPurchaseEffect(userId, item.effect, purchase.id)
 
+    const completedAt = new Date().toISOString()
     if (existing) {
-      await db.from('ad_progress').update({ watched_count: 0, updated_at: new Date().toISOString() }).eq('id', existing.id)
+      await db.from('ad_progress').update({
+        watched_count: 0,
+        last_completed_at: completedAt,
+        updated_at: completedAt,
+      }).eq('id', existing.id)
     } else {
-      await db.from('ad_progress').insert({ user_id: userId, item_slug: itemSlug, watched_count: 0 })
+      await db.from('ad_progress').insert({
+        user_id: userId, item_slug: itemSlug, watched_count: 0, last_completed_at: completedAt,
+      })
     }
 
-    return NextResponse.json({ success: true, completed: true, watched: 0, required })
+    return NextResponse.json({
+      success: true,
+      completed: true,
+      watched: 0,
+      required,
+      lockedUntil: nextUtcMidnight(new Date()),
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
