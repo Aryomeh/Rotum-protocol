@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: Request) {
-  const { id, name, status, ends_at, pool_size } = await req.json()
+  const {
+    id, name, status, ends_at, pool_size,
+    top10_reward, top100_reward, random_reward, random_pct,
+  } = await req.json()
 
   if (!id) {
     return NextResponse.json({ success: false, error: 'Missing id' }, { status: 400 })
@@ -41,7 +44,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // Sync the bucket's distributed amount to match the new target size
     const { error: syncErr } = await supabase
       .from('tokenomics_supply')
       .update({
@@ -55,7 +57,11 @@ export async function POST(req: Request) {
   }
 
   const updatePayload: Record<string, any> = { name, status, ends_at }
-  if (pool_size !== undefined) updatePayload.pool_size = pool_size
+  if (pool_size !== undefined)      updatePayload.pool_size      = pool_size
+  if (top10_reward !== undefined)   updatePayload.top10_reward   = top10_reward
+  if (top100_reward !== undefined)  updatePayload.top100_reward  = top100_reward
+  if (random_reward !== undefined)  updatePayload.random_reward  = random_reward
+  if (random_pct !== undefined)     updatePayload.random_pct     = random_pct
 
   const { data, error } = await supabase
     .from('seasons')
