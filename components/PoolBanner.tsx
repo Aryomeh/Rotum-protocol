@@ -3,7 +3,7 @@ import { useStore } from '@/store/useStore'
 import { supabase } from '@/lib/supabase'
 
 export default function PoolBanner() {
-  const { season, user, setUser, showToast } = useStore()
+  const { season, user, setUser, showToast, operatorCount } = useStore()
 
   const pool       = season ? Math.floor(season.pool_current) : 0
   const poolMax    = season ? season.pool_size : 10_000
@@ -74,7 +74,7 @@ export default function PoolBanner() {
         className="font-mono text-xs mt-1.5 mb-2"
         style={{ color: 'var(--rtm-muted)' }}
       >
-        {daysLeft}d remaining · 248,142 operators competing
+        {daysLeft}d remaining · {operatorCount.toLocaleString()} operators competing
       </div>
 
       {!user?.mining_active ? (

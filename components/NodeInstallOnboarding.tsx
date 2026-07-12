@@ -8,6 +8,10 @@ export default function NodeInstallOnboarding() {
   const [installComplete, setInstallComplete] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
+  // Source of truth for the running loop. Set directly at click time (or on
+  // recovery) — never re-read from CloudStorage while the loop is active,
+  // since that read can race the write and come back empty.
+  const [startTime, setStartTime] = useState<number | null>(null)
 
   const DURATION = 15000 // 15 seconds
 
@@ -19,21 +23,22 @@ export default function NodeInstallOnboarding() {
     return null
   }
 
-  // 1. Recover background state on mount
+  // 1. Recover background state on mount (e.g. app was closed/reloaded mid-install)
   useEffect(() => {
     if (!user?.id) return
 
     const tg = getTelegramWebApp()
 
     const handleRecovery = (savedStartTime: string) => {
-      const startTime = parseInt(savedStartTime, 10)
+      const start = parseInt(savedStartTime, 10)
       const now = Date.now()
-      
-      if (now - startTime >= DURATION) {
+
+      if (now - start >= DURATION) {
         setProgress(100)
         setInstallComplete(true)
         setIsInstalling(false)
       } else {
+        setStartTime(start)
         setIsInstalling(true)
       }
     }
@@ -52,55 +57,41 @@ export default function NodeInstallOnboarding() {
     }
   }, [user?.id])
 
-  // 2. Persistent Progress Loop
+  // 2. Persistent Progress Loop — driven entirely by local `startTime` state,
+  // no re-fetch from CloudStorage here. That avoids racing the setItem() call
+  // made in handleInstallClick, which was causing the loop to never start on
+  // first install (progress stuck at 0% until a reload recovered it).
   useEffect(() => {
-    if (!isInstalling || !user?.id) return
+    if (!isInstalling || !user?.id || startTime === null) return
 
-    let interval: NodeJS.Timeout
+    const targetEndTime = startTime + DURATION
     const tg = getTelegramWebApp()
 
-    const startLoop = (savedStartTime: string) => {
-      const startTime = parseInt(savedStartTime, 10)
-      const targetEndTime = startTime + DURATION
+    const updateProgress = () => {
+      const now = Date.now()
+      const elapsed = now - startTime
+      const currentProgress = Math.min((elapsed / DURATION) * 100, 100)
 
-      const updateProgress = () => {
-        const now = Date.now()
-        const elapsed = now - startTime
-        const currentProgress = Math.min((elapsed / DURATION) * 100, 100)
+      if (now >= targetEndTime) {
+        setProgress(100)
+        setInstallComplete(true)
+        setIsInstalling(false)
 
-        if (now >= targetEndTime) {
-          setProgress(100)
-          setInstallComplete(true)
-          setIsInstalling(false)
-          
-          if (tg?.CloudStorage) {
-            tg.CloudStorage.removeItem(`node_install_start_${user.id}`)
-          } else {
-            localStorage.removeItem(`node_install_start_${user.id}`)
-          }
-          clearInterval(interval)
+        if (tg?.CloudStorage) {
+          tg.CloudStorage.removeItem(`node_install_start_${user.id}`)
         } else {
-          setProgress(currentProgress)
+          localStorage.removeItem(`node_install_start_${user.id}`)
         }
+      } else {
+        setProgress(currentProgress)
       }
-
-      updateProgress()
-      interval = setInterval(updateProgress, 50)
     }
 
-    if (tg?.CloudStorage) {
-      tg.CloudStorage.getItem(`node_install_start_${user.id}`, (err: any, value: string) => {
-        if (!err && value) startLoop(value)
-      })
-    } else {
-      const savedStartTime = localStorage.getItem(`node_install_start_${user.id}`)
-      if (savedStartTime) startLoop(savedStartTime)
-    }
+    updateProgress()
+    const interval = setInterval(updateProgress, 50)
 
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [isInstalling, user?.id])
+    return () => clearInterval(interval)
+  }, [isInstalling, startTime, user?.id])
 
   const handleInstallClick = async () => {
     try {
@@ -111,18 +102,24 @@ export default function NodeInstallOnboarding() {
       }
 
       // 1. Track timestamp immediately so it persists if they close the app right after paying
-      const nowStr = Date.now().toString()
+      const now = Date.now()
+      const nowStr = now.toString()
       const tg = getTelegramWebApp()
 
+      // Fire-and-forget persistence for recovery purposes only — we do NOT
+      // read this back to start the loop, since that round-trip can lag
+      // behind this write and leave the loop never started.
       if (tg?.CloudStorage) {
         tg.CloudStorage.setItem(`node_install_start_${user.id}`, nowStr)
       } else {
         localStorage.setItem(`node_install_start_${user.id}`, nowStr)
       }
 
+      // 2. Start the loop immediately using the value already in hand
+      setStartTime(now)
       setIsInstalling(true)
 
-      // 2. Fire and forget the simulation API call
+      // 3. Fire and forget the simulation API call
       const token = sessionStorage.getItem('rtm_token')
       const response = await fetch('/api/node/install-first', {
         method: 'POST',
@@ -141,6 +138,7 @@ export default function NodeInstallOnboarding() {
       console.error('Installation error:', err)
       setError(err.message || 'Installation failed')
       setIsInstalling(false)
+      setStartTime(null)
       setProgress(0)
 
       const tg = getTelegramWebApp()

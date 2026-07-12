@@ -16,6 +16,7 @@ export const useStore = create<AppStore>((set, get) => ({
   isFirstTime: false,
   nodeInstallProgress: 0,
   toast: null,
+  operatorCount: 0,
 
   setUser:      (user)    => set({ user }),
   setSeason:    (season)  => set({ season }),
@@ -23,6 +24,7 @@ export const useStore = create<AppStore>((set, get) => ({
   setUserNodes: (userNodes) => set({ userNodes }),
   setRankings:  (rankings)  => set({ rankings }),
   setMyRank:    (myRank)    => set({ myRank }),
+  setOperatorCount: (operatorCount) => set({ operatorCount }),
 
   addFeedItem: (item) =>
     set((state) => ({

@@ -147,6 +147,8 @@ export interface AppStore {
   isFirstTime: boolean
   nodeInstallProgress: number
   toast: string | null
+  operatorCount: number
+  
 
   setUser: (u: User) => void
   setSeason: (s: Season) => void
@@ -162,4 +164,5 @@ export interface AppStore {
   setNodeInstallProgress: (progress: number) => void
   showToast: (message: string) => void
   loadUserData: () => Promise<void>
+  setOperatorCount: (count: number) => void
 }

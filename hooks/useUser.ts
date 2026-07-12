@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 
 export function useUser() {
   const { setUser, setSeason, setUpgrades, setUserNodes,
-          setRankings, setMyRank, setLoading, setError, setFirstTime } = useStore()
+          setRankings, setMyRank, setLoading, setError, setFirstTime,
+          setOperatorCount } = useStore()
   const bootstrapped = useRef(false)
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function useUser() {
         const activeSeasonId = seasonRes.data?.id ?? 1
 
         // 5. Load the rest in parallel now that we know the real season id
-        const [upgradesRes, nodesRes, rankingsRes] = await Promise.all([
+        const [upgradesRes, nodesRes, rankingsRes, operatorCountRes] = await Promise.all([
           supabase
             .from('upgrade_catalogue')
             .select('*')
@@ -72,6 +73,12 @@ export function useUser() {
             .eq('season_id', activeSeasonId)
             .order('rank', { ascending: true })
             .limit(100),
+
+          // Real count of registered, non-banned operators
+          supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_banned', false),
         ])
 
         if (upgradesRes.data) setUpgrades(upgradesRes.data)
@@ -88,6 +95,10 @@ export function useUser() {
           setRankings(flat)
           const mine = flat.find((r: any) => r.user_id === user.id) ?? null
           setMyRank(mine)
+        }
+
+        if (typeof operatorCountRes.count === 'number') {
+          setOperatorCount(operatorCountRes.count)
         }
       } catch (err: any) {
         setError(err.message ?? 'Failed to load')

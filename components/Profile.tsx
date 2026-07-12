@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
-import { supabase } from '@/lib/supabase'
 import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react'
 
 interface ProfileProps {
@@ -31,15 +30,20 @@ export default function Profile({ onClose }: ProfileProps) {
 
   async function loadReferralStats() {
     setLoading(true)
-    const { count } = await supabase
-      .from('referrals')
-      .select('id', { count: 'exact', head: true })
-      .eq('referrer_id', user!.id)
-    setReferralStats({
-      total: count ?? 0,
-      bonus: (count ?? 0) * 5,
-    })
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/user/referrals?userId=${user!.id}`)
+      if (!res.ok) throw new Error('Failed to load referral stats')
+      const data = await res.json()
+      setReferralStats({
+        total: data.total ?? 0,
+        bonus: data.bonus ?? 0,
+      })
+    } catch (err) {
+      console.error('Error loading referral stats:', err)
+      setReferralStats({ total: 0, bonus: 0 })
+    } finally {
+      setLoading(false)
+    }
   }
 
   function copyReferral() {
