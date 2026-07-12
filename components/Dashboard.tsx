@@ -52,11 +52,13 @@ export default function Dashboard() {
   // EST. REWARD now reflects exactly what refresh_season_rankings() calculated —
   // a hash-power-weighted share of your tier's cut of the current pool.
   // No frontend multiplier on top of it.
-  const reward = Math.floor(myRank?.est_reward ?? 0)
+  // Shown to 2 decimals (not floored) so users see the number tick up in
+  // real time at the 0.01/hr base rate, rather than sitting at "0" for ages.
+  const reward = myRank?.est_reward ?? 0
 
   const statValues: Record<string, string> = {
     rank:   typeof rank === 'number' ? `#${rank.toLocaleString()}` : '—',
-    reward: `${reward.toLocaleString()} $RTM`,
+    reward: `${reward.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $RTM`,
     nodes:  String(nodes),
     uptime: `${uptime}%`,
   }

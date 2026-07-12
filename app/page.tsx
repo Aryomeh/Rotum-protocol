@@ -132,7 +132,7 @@ function TopBar({ onProfileClick }: { onProfileClick: () => void }) {
             color:        'var(--rtm-green)',
             marginTop:    2,
           }}>
-            {Math.floor(user?.rtm_balance ?? 0).toLocaleString()} $RTM
+            {(user?.rtm_balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $RTM
           </div>
         </div>
       </button>
