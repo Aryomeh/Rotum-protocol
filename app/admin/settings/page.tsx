@@ -75,18 +75,14 @@ export default function AdminSettings() {
   useEffect(() => { loadStats() }, [])
 
   async function loadStats() {
-    const [usersRes, nodesRes, purchasesRes, feedRes] = await Promise.all([
-      supabase.from('users').select('id', { count: 'exact', head: true }),
-      supabase.from('user_nodes').select('id', { count: 'exact', head: true }),
-      supabase.from('purchases').select('id', { count: 'exact', head: true }),
-      supabase.from('network_feed').select('id', { count: 'exact', head: true }),
-    ])
-    setDbStats({
-      users:     usersRes.count ?? 0,
-      nodes:     nodesRes.count ?? 0,
-      purchases: purchasesRes.count ?? 0,
-      feed:      feedRes.count ?? 0,
-    })
+    try {
+      const res = await fetch('/api/admin/stats')
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setDbStats(data)
+    } catch (err) {
+      showToast('❌ Failed to load stats')
+    }
   }
 
   function showToast(msg: string) {
