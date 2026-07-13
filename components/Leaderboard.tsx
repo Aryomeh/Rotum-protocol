@@ -7,7 +7,7 @@ const MEDALS = ['🥇', '🥈', '🥉']
 const MEDAL_COLORS = ['#ffd700', '#c0c0c0', '#cd7f32']
 
 export default function Leaderboard() {
-  const { rankings, myRank, user } = useStore()
+  const { rankings, myRank, user, operatorCount } = useStore()
 
   return (
     <div className="animate-page px-3 pt-3">
@@ -42,7 +42,11 @@ export default function Leaderboard() {
                   `Operator #${r.rank}`
                 }
                 hash={formatHashRate(r.hash_power)}
-                reward={`${Math.floor(r.est_reward).toLocaleString()} $RTM`}
+                reward={`${
+                  r.est_reward < 1
+                    ? r.est_reward.toFixed(2)
+                    : Math.floor(r.est_reward).toLocaleString()
+                } $RTM`}
                 isYou={isYou}
               />
             )
@@ -54,7 +58,7 @@ export default function Leaderboard() {
           className="font-mono text-center py-1.5"
           style={{ fontSize: 9, color: 'var(--rtm-muted)' }}
         >
-          ··· {(248_142 - rankings.length).toLocaleString()} more operators ···
+          ··· {Math.max(operatorCount - rankings.length, 0).toLocaleString()} more operators ···
         </div>
       </div>
 
@@ -72,7 +76,7 @@ export default function Leaderboard() {
           className="font-mono text-xs"
           style={{ color: 'var(--rtm-text)' }}
         >
-          #{(myRank?.rank ?? '—').toLocaleString()} of 248,142
+          #{(myRank?.rank ?? '—').toLocaleString()} of {operatorCount.toLocaleString()}
         </span>
 
         <span
@@ -81,7 +85,9 @@ export default function Leaderboard() {
         >
           EST.{' '}
           {myRank
-            ? Math.floor(myRank.est_reward).toLocaleString()
+            ? myRank.est_reward < 1
+              ? myRank.est_reward.toFixed(2)
+              : Math.floor(myRank.est_reward).toLocaleString()
             : '0'}{' '}
           $RTM
         </span>
