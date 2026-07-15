@@ -59,27 +59,18 @@ export default function AdminDashboard() {
 
   async function loadStats() {
     try {
-      const [seasonRes, usersRes, activeRes, purchasesRes] = await Promise.all([
-        supabase.from('seasons').select('*').eq('status', 'active').single(),
-        supabase.from('users').select('id', { count: 'exact', head: true }),
-        supabase.from('users').select('id', { count: 'exact', head: true })
-          .gte('last_active_at', new Date(Date.now() - 86_400_000).toISOString()),
-        supabase.from('purchases').select('price_stars', { count: 'exact' }).eq('status', 'completed'),
-      ])
-
-      const season    = seasonRes.data
-      const endsAt    = season ? new Date(season.ends_at) : null
-      const daysLeft  = endsAt ? Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86_400_000)) : 0
-      const totalStars = purchasesRes.data?.reduce((s: number, p: any) => s + (p.price_stars ?? 0), 0) ?? 0
+      const res = await fetch('/api/admin/stats')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? 'Failed to load stats')
 
       setStats({
-        totalUsers:     usersRes.count ?? 0,
-        activeToday:    activeRes.count ?? 0,
-        seasonPool:     season?.pool_current ?? 0,
-        totalPurchases: totalStars,
-        seasonName:     season?.name ?? '—',
-        seasonDaysLeft: daysLeft,
-        networkHash:    '142.8 PH/s',
+        totalUsers:     data.totalUsers,
+        activeToday:    data.activeToday,
+        seasonPool:     data.seasonPool,
+        totalPurchases: data.totalPurchases,
+        seasonName:     data.seasonName,
+        seasonDaysLeft: data.seasonDaysLeft,
+        networkHash:    data.networkHash,
       })
     } catch (e) {
       console.error(e)
