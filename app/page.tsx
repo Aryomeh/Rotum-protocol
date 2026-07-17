@@ -81,6 +81,33 @@ export default function Home() {
 
 function TopBar({ onProfileClick }: { onProfileClick: () => void }) {
   const { season, user } = useStore()
+  const [rtmPriceUsd, setRtmPriceUsd] = useState<number | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPrice() {
+      try {
+        const res = await fetch('/api/stats/rtm-price')
+        const data = await res.json()
+        if (!cancelled && typeof data.rtm_price_usd === 'number') {
+          setRtmPriceUsd(data.rtm_price_usd)
+        }
+      } catch (err) {
+        console.error('Failed to load RTM price:', err)
+      }
+    }
+
+    loadPrice()
+    const id = setInterval(loadPrice, 60_000) // refresh every 60s
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [])
+
+  const balance = user?.rtm_balance ?? 0
+  const usdEstimate = rtmPriceUsd != null ? balance * rtmPriceUsd : null
 
   return (
     <div className="flex items-center justify-between px-4 py-2.5 sticky top-0 z-10"
@@ -132,7 +159,12 @@ function TopBar({ onProfileClick }: { onProfileClick: () => void }) {
             color:        'var(--rtm-green)',
             marginTop:    2,
           }}>
-            {(user?.rtm_balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $RTM
+            {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $RTM
+            {usdEstimate != null && (
+              <span style={{ color: 'var(--rtm-muted)', marginLeft: 6 }}>
+                (≈${usdEstimate.toFixed(2)})
+              </span>
+            )}
           </div>
         </div>
       </button>

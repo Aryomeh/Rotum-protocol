@@ -5,10 +5,20 @@ import type { UpgradeCatalogue, UserNode } from './types'
 
 export const BASE_HASH = 2.0  // every operator starts with 2 GH/s
 
+// Referral hash bonus: 5% per referral, capped at 50% (10 referrals)
+export const REFERRAL_BONUS_PCT_PER_REFERRAL = 5
+export const REFERRAL_BONUS_CAP_PCT = 50
+
+export function referralBonusPct(referralCount: number): number {
+  const raw = Math.max(0, referralCount) * REFERRAL_BONUS_PCT_PER_REFERRAL
+  return Math.min(REFERRAL_BONUS_CAP_PCT, raw)
+}
+
 export function calculateHashPower(
   nodes: UserNode[],
   catalogue: UpgradeCatalogue[],
-  boost: number = 1.0
+  boost: number = 1.0,
+  referralCount: number = 0
 ): number {
   const catMap = Object.fromEntries(catalogue.map(c => [c.slug, c]))
 
@@ -18,7 +28,10 @@ export function calculateHashPower(
     return sum + cat.hash_per_level * node.level
   }, 0)
 
-  return (BASE_HASH + nodeHash) * boost
+  const bonusPct = referralBonusPct(referralCount)
+  const referralMultiplier = 1 + bonusPct / 100
+
+  return (BASE_HASH + nodeHash) * boost * referralMultiplier
 }
 
 // Cost of next level for a given upgrade (mirrors cost_scale in DB)
