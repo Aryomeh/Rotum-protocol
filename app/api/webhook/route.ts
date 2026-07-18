@@ -56,8 +56,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      const db = getSupabaseAdmin()
-
       // Idempotency — check charge not already processed
       const { data: existing } = await db
         .from('purchases')
