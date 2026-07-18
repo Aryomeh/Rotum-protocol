@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react'
-
+import DailyCheckin from '@/components/DailyCheckin'
 interface ProfileProps {
   onClose: () => void
 }
@@ -241,6 +241,16 @@ export default function Profile({ onClose }: ProfileProps) {
             </div>
           ))}
         </div>
+
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+          {/* ...existing stats mapping... */}
+        </div>
+
+        {/* Daily Check-in */}
+        {user && <DailyCheckin telegramId={user.telegram_id} />}
+
+        {/* Referral section */}
 
         {/* Referral section */}
         <div style={{
