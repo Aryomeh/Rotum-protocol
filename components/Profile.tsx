@@ -246,11 +246,8 @@ export default function Profile({ onClose }: ProfileProps) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
           {/* ...existing stats mapping... */}
         </div>
-
         {/* Daily Check-in */}
-        {user && <DailyCheckin telegramId={user.telegram_id} />}
-
-        {/* Referral section */}
+        {user && <DailyCheckin userId={user.id} telegramId={user.telegram_id} />}
 
         {/* Referral section */}
         <div style={{

@@ -3,11 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 
 const SHOP_ITEMS: Record<string, { title: string; description: string; stars: number }> = {
-  hash_boost_24h:   { title: 'Hash Boost (24h)',  description: '2× your hash rate for 24 hours',        stars: 25  },
-  mining_crate:     { title: 'Mining Crate',      description: 'Random node upgrade or $RTM bonus',      stars: 50  },
-  accelerator_pack: { title: 'Accelerator Pack',  description: 'Permanent +10% hash rate boost',         stars: 100 },
-  validator_slot:   { title: 'Validator Slot',    description: 'Unlock the Validator Node tier',         stars: 200 },
-  quantum_upgrade:  { title: 'Quantum Upgrade',   description: 'Unlock the Quantum Processor tier',      stars: 500 },
+  hash_boost_24h:    { title: 'Hash Boost (24h)',  description: '2× your hash rate for 24 hours',        stars: 25  },
+  mining_crate:      { title: 'Mining Crate',      description: 'Random node upgrade or $RTM bonus',      stars: 50  },
+  accelerator_pack:  { title: 'Accelerator Pack',  description: 'Permanent +10% hash rate boost',         stars: 100 },
+  validator_slot:    { title: 'Validator Slot',    description: 'Unlock the Validator Node tier',         stars: 200 },
+  quantum_upgrade:   { title: 'Quantum Upgrade',   description: 'Unlock the Quantum Processor tier',      stars: 500 },
+  daily_checkin_star: { title: 'Daily Check-in',   description: 'Skip the ads — instant 0.2 $RTM check-in', stars: 2 },
 }
 
 export async function POST(req: NextRequest) {
