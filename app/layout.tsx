@@ -23,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script src="//libtl.com/sdk.js" data-zone="11234708" data-sdk="show_11234708"></script>
         <script src="https://telegram.org/js/telegram-web-app.js" />
+        <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
       </head>
       <body className="antialiased">
         <TonProvider>

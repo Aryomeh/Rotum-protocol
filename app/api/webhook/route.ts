@@ -47,6 +47,17 @@ export async function POST(req: NextRequest) {
 
       const db = getSupabaseAdmin()
 
+      // Daily check-in via Stars — handled separately from regular store purchases
+      if (payload.itemSlug === 'daily_checkin_star') {
+        await db.rpc('process_daily_checkin', {
+          p_telegram_id: telegramId,
+          p_method: 'star',
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      const db = getSupabaseAdmin()
+
       // Idempotency — check charge not already processed
       const { data: existing } = await db
         .from('purchases')
