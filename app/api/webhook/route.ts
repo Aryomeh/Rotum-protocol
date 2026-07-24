@@ -18,7 +18,14 @@ export async function POST(req: NextRequest) {
     if (body.pre_checkout_query) {
       const query = body.pre_checkout_query
 
-      await fetch(`https://api.telegram.org/bot${botToken}/answerPreCheckoutQuery`, {
+      console.log('[webhook] pre_checkout_query received:', {
+        id: query.id,
+        from: query.from?.id,
+        payload: query.invoice_payload,
+        botTokenPresent: !!botToken,
+      })
+
+      const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/answerPreCheckoutQuery`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -26,6 +33,17 @@ export async function POST(req: NextRequest) {
           ok:                    true,
         }),
       })
+
+      const tgData = await tgRes.json()
+
+      if (!tgData.ok) {
+        console.error('[webhook] answerPreCheckoutQuery FAILED:', {
+          status: tgRes.status,
+          response: tgData,
+        })
+      } else {
+        console.log('[webhook] answerPreCheckoutQuery OK:', tgData)
+      }
 
       return NextResponse.json({ ok: true })
     }
@@ -35,6 +53,13 @@ export async function POST(req: NextRequest) {
       const payment    = body.message.successful_payment
       const telegramId = body.message.from.id
       const chargeId   = payment.telegram_payment_charge_id
+
+      console.log('[webhook] successful_payment received:', {
+        telegramId,
+        chargeId,
+        totalAmount: payment.total_amount,
+        payload: payment.invoice_payload,
+      })
 
       // Parse payload we embedded in the invoice
       let payload: { userId: string; itemSlug: string; telegramId: number }
@@ -49,10 +74,17 @@ export async function POST(req: NextRequest) {
 
       // Daily check-in via Stars — handled separately from regular store purchases
       if (payload.itemSlug === 'daily_checkin_star') {
-        await db.rpc('process_daily_checkin', {
+        const { data: checkinData, error: checkinErr } = await db.rpc('process_daily_checkin', {
           p_telegram_id: telegramId,
           p_method: 'star',
         })
+
+        if (checkinErr) {
+          console.error('[webhook] process_daily_checkin RPC error:', checkinErr)
+        } else {
+          console.log('[webhook] process_daily_checkin OK:', checkinData)
+        }
+
         return NextResponse.json({ ok: true })
       }
 
@@ -64,6 +96,7 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (existing) {
+        console.log('[webhook] Charge already processed, skipping:', chargeId)
         return NextResponse.json({ ok: true }) // already handled
       }
 
@@ -86,6 +119,8 @@ export async function POST(req: NextRequest) {
         console.error('[webhook] Purchase insert error:', purchaseErr)
         return NextResponse.json({ ok: true })
       }
+
+      console.log('[webhook] Purchase recorded:', purchase.id)
 
       // Apply the item effect
       await applyEffect(payload.userId, payload.itemSlug, purchase.id, db)
@@ -122,13 +157,16 @@ export async function POST(req: NextRequest) {
         }),
       })
 
+      console.log('[webhook] Purchase flow complete for charge:', chargeId)
+
       return NextResponse.json({ ok: true })
     }
 
     // Unknown update type — just acknowledge
+    console.log('[webhook] Unknown update type:', Object.keys(body))
     return NextResponse.json({ ok: true })
   } catch (err: any) {
-    console.error('[webhook]', err)
+    console.error('[webhook] Uncaught error:', err)
     // Always return 200 to Telegram even on error
     // Otherwise Telegram will retry repeatedly
     return NextResponse.json({ ok: true })
